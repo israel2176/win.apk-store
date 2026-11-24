@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 
 enum class Tab { Home, Search, Downloads }
 
-data class HomeSection(val title: String, val apps: List<AppSummary>)
+data class HomeSection(val title: String, val query: String, val apps: List<AppSummary>)
 
 sealed class Load<out T> {
     data object Loading : Load<Nothing>()
@@ -64,7 +64,7 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             home = try {
                 val sections = homeRows.map { (title, q) ->
-                    async { HomeSection(title, runCatching { PlayApi.search(q) }.getOrDefault(emptyList()).take(12)) }
+                    async { HomeSection(title, q, runCatching { PlayApi.search(q) }.getOrDefault(emptyList()).take(12)) }
                 }.awaitAll().filter { it.apps.isNotEmpty() }
                 if (sections.isEmpty()) Load.Error("לא ניתן לטעון מפליי כרגע") else Load.Done(sections)
             } catch (e: Exception) {

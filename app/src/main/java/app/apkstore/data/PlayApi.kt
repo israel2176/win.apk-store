@@ -117,7 +117,10 @@ object PlayApi {
     }
 
     private fun parseTop(t: JSONArray): AppSummary? {
-        val pkg = t.str(11, 0, 0) ?: return null
+        // המיקום השתנה בעבר: פעם במערך 11, היום באובייקט שבאינדקס 3 תחת המפתח "12"
+        val pkg = t.str(11, 0, 0)
+            ?: ((t.at(3) as? JSONObject)?.optJSONArray("12")).str(0, 0)
+            ?: return null
         return AppSummary(
             pkg = pkg,
             title = t.str(2, 0, 0) ?: pkg,

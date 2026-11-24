@@ -9,18 +9,35 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,42 +46,53 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.apkstore.data.AppSummary
 import app.apkstore.data.DlState
+import app.apkstore.data.screenshotImage
 import app.apkstore.data.sizedImage
 import coil.compose.AsyncImage
 
-val Green = Color(0xFF0B7A5A)
-val Muted = Color(0xFF444746)
-val Surface2 = Color(0xFFF0F2F1)
+// ================= אייקונים =================
 
-@Composable
-fun StoreTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = Green,
-            onPrimary = Color.White,
-            secondaryContainer = Green.copy(alpha = 0.16f),
-            surface = Color.White,
-            background = Color.White,
-            surfaceContainer = Color(0xFFF3F5F4),
-        ),
-        content = content,
-    )
-}
+private fun icon(name: String, block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit) =
+    ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).path(fill = SolidColor(Color.Black), pathBuilder = block).build()
 
 val DownloadIcon: ImageVector by lazy {
-    ImageVector.Builder("download", 24.dp, 24.dp, 24f, 24f).path(fill = SolidColor(Color.Black)) {
+    icon("download") {
         moveTo(5f, 20f); horizontalLineToRelative(14f); verticalLineToRelative(-2f); horizontalLineTo(5f); close()
         moveTo(19f, 9f); horizontalLineToRelative(-4f); verticalLineTo(3f); horizontalLineTo(9f)
         verticalLineToRelative(6f); horizontalLineTo(5f); lineToRelative(7f, 7f); close()
-    }.build()
+    }
 }
 
-/** אייקון האפליקציה כפי שהוא בפליי */
+/** חבילה עם חץ - "התקנה" */
+val InstallIcon: ImageVector by lazy {
+    icon("install") {
+        moveTo(19f, 3f); horizontalLineTo(5f); curveTo(3.9f, 3f, 3f, 3.9f, 3f, 5f); verticalLineToRelative(14f)
+        curveToRelative(0f, 1.1f, 0.9f, 2f, 2f, 2f); horizontalLineToRelative(14f); curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
+        verticalLineTo(5f); curveToRelative(0f, -1.1f, -0.9f, -2f, -2f, -2f); close()
+        moveTo(12f, 17f); lineToRelative(-5f, -5f); horizontalLineToRelative(3f); verticalLineTo(7f)
+        horizontalLineToRelative(4f); verticalLineToRelative(5f); horizontalLineToRelative(3f); close()
+    }
+}
+
+/** מגן - חסימה / בדיקה של נטפרי */
+val ShieldIcon: ImageVector by lazy {
+    icon("shield") {
+        moveTo(12f, 1f); lineTo(3f, 5f); verticalLineToRelative(6f)
+        curveToRelative(0f, 5.55f, 3.84f, 10.74f, 9f, 12f); curveToRelative(5.16f, -1.26f, 9f, -6.45f, 9f, -12f)
+        verticalLineTo(5f); close()
+    }
+}
+
+// ================= אייקון אפליקציה ודירוג =================
+
 @Composable
 fun AppIcon(url: String?, size: Dp) {
     val px = (size.value * 2.5f).toInt().coerceIn(64, 256)
@@ -74,36 +102,84 @@ fun AppIcon(url: String?, size: Dp) {
         contentScale = ContentScale.Crop,
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(size * 0.22f))
-            .background(Surface2),
+            // עיגול חזק יותר מאשר בחנות של גוגל - "סקוויקרל"
+            .clip(RoundedCornerShape(size * 0.3f))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
     )
 }
 
+/** ★ 4.5 - כוכב בצבע ענבר ומספר */
 @Composable
-fun RatingText(score: Double?, extra: String? = null) {
-    val parts = listOfNotNull(score?.let { "%.1f".format(it) + " ★" }, extra)
-    if (parts.isNotEmpty()) {
-        Text(parts.joinToString("  "), style = MaterialTheme.typography.bodySmall, color = Muted)
+fun Rating(score: Double?, modifier: Modifier = Modifier) {
+    if (score == null || score <= 0) return
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("%.1f".format(score), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(Icons.Default.Star, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.tertiary)
     }
 }
 
+/** שורת אפליקציה ברשימה: אייקון, שם, מפתח, דירוג, וכפתור הורדה עגול */
 @Composable
-fun AppRow(app: AppSummary, onClick: () -> Unit) {
+fun AppRow(app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: () -> Unit, onInstall: (DlState.Ready) -> Unit, onShowDownloads: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         AppIcon(app.icon, 56.dp)
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(app.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            app.developer?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Muted, maxLines = 1) }
-            RatingText(app.score, app.genre)
+            app.developer?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Rating(app.score)
+                app.genre?.let { GenrePill(it) }
+            }
         }
+        DownloadIconButton(state, onDownload, onInstall, onShowDownloads)
     }
 }
 
-/** כפתור ההורדה בדף אפליקציה ובתוצאת חיפוש - מציג מצב לפי ההורדה */
+@Composable
+fun GenrePill(text: String) {
+    Text(
+        text, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        color = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+// ================= כפתורי הורדה =================
+
+/** כפתור עגול בלי טקסט - לרשימות */
+@Composable
+fun DownloadIconButton(state: DlState?, onDownload: () -> Unit, onInstall: (DlState.Ready) -> Unit, onShowDownloads: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    when (state) {
+        is DlState.Ready -> FilledTonalIconButton(
+            onClick = { onInstall(state) },
+            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.primary, contentColor = cs.onPrimary),
+        ) { Icon(InstallIcon, "התקנה") }
+        is DlState.Preparing, is DlState.Downloading -> Box(Modifier.size(48.dp).clickable(onClick = onShowDownloads), contentAlignment = Alignment.Center) {
+            val p = (state as? DlState.Downloading)?.progress ?: -1f
+            if (p >= 0) CircularProgressIndicator(progress = { p }, Modifier.size(34.dp), strokeWidth = 3.dp, trackColor = cs.surfaceContainerHighest)
+            else CircularProgressIndicator(Modifier.size(34.dp), strokeWidth = 3.dp)
+        }
+        is DlState.NotChecked, is DlState.Blocked -> FilledTonalIconButton(
+            onClick = onShowDownloads,
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = if (state is DlState.NotChecked) cs.tertiaryContainer else cs.errorContainer,
+                contentColor = if (state is DlState.NotChecked) cs.onTertiaryContainer else cs.onErrorContainer,
+            ),
+        ) { Icon(ShieldIcon, "נטפרי") }
+        else -> FilledTonalIconButton(onClick = onDownload) { Icon(DownloadIcon, "הורדה") }
+    }
+}
+
+/** כפתור רחב - בדף האפליקציה ובתוצאה הראשונה */
 @Composable
 fun DownloadButton(
     state: DlState?,
@@ -112,36 +188,111 @@ fun DownloadButton(
     onInstall: (DlState.Ready) -> Unit,
     onShowDownloads: () -> Unit,
 ) {
+    val cs = MaterialTheme.colorScheme
+    val mod = modifier.height(48.dp)
     when (state) {
-        is DlState.Ready -> Button(onClick = { onInstall(state) }, modifier) { Text("התקנה") }
-        is DlState.Preparing, is DlState.Downloading -> OutlinedButton(onClick = onShowDownloads, modifier) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(10.dp))
+        is DlState.Ready -> Button(onClick = { onInstall(state) }, mod) {
+            Icon(InstallIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("התקנה")
+        }
+        is DlState.Preparing, is DlState.Downloading -> OutlinedButton(onClick = onShowDownloads, mod) {
             val p = (state as? DlState.Downloading)?.progress ?: -1f
-            Text(if (p >= 0) "מוריד ${(p * 100).toInt()}%" else "מוריד…")
+            if (p >= 0) CircularProgressIndicator(progress = { p }, Modifier.size(20.dp), strokeWidth = 2.5.dp)
+            else CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.5.dp)
+            if (p >= 0) { Spacer(Modifier.width(10.dp)); Text("${(p * 100).toInt()}%") }
         }
-        is DlState.NotChecked, is DlState.Blocked -> OutlinedButton(onClick = onShowDownloads, modifier) {
-            Text(if (state is DlState.NotChecked) "הקובץ לא נבדק ע״י נטפרי" else "נחסם ע״י נטפרי")
+        is DlState.NotChecked, is DlState.Blocked -> Button(
+            onClick = onShowDownloads, mod,
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = if (state is DlState.NotChecked) cs.tertiaryContainer else cs.errorContainer,
+                contentColor = if (state is DlState.NotChecked) cs.onTertiaryContainer else cs.onErrorContainer,
+            ),
+        ) {
+            Icon(ShieldIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
+            Text(if (state is DlState.NotChecked) "ממתין לבדיקה" else "חסום")
         }
-        else -> Button(onClick = onDownload, modifier) {
-            Icon(DownloadIcon, null, Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("הורדה")
+        else -> Button(onClick = onDownload, mod) {
+            Icon(DownloadIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("הורדה")
+        }
+    }
+}
+
+// ================= צילומי מסך =================
+
+@Composable
+fun Screenshots(urls: List<String>, height: Dp, startPad: Dp = 0.dp) {
+    var open by remember { mutableStateOf<Int?>(null) }
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = startPad),
+    ) {
+        itemsIndexed(urls) { i, u ->
+            AsyncImage(
+                model = screenshotImage(u, (height.value * 2.5f).toInt()),
+                contentDescription = null,
+                contentScale = ContentScale.FillHeight,
+                modifier = Modifier.height(height).clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable { open = i },
+            )
+        }
+    }
+    open?.let { start -> ScreenshotViewer(urls, start) { open = null } }
+}
+
+/** צפייה במסך מלא עם החלקה */
+@Composable
+private fun ScreenshotViewer(urls: List<String>, start: Int, onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            val pager = rememberPagerState(initialPage = start) { urls.size }
+            HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+                AsyncImage(
+                    model = screenshotImage(urls[page], 1600),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            IconButton(onClick = onClose, Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                Icon(Icons.Default.Close, "סגירה", tint = Color.White)
+            }
+            Row(Modifier.align(Alignment.BottomCenter).padding(20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                repeat(urls.size) { i ->
+                    Box(
+                        Modifier.size(if (i == pager.currentPage) 8.dp else 6.dp).clip(CircleShape)
+                            .background(Color.White.copy(alpha = if (i == pager.currentPage) 1f else 0.4f))
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ================= מצבים =================
+
+/** הודעה במרכז המסך: אייקון גדול, שורה קצרה, וכפתור רענון עגול */
+@Composable
+fun CenterMessage(icon: ImageVector, text: String? = null, onRetry: (() -> Unit)? = null) {
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(
+                Modifier.size(88.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center,
+            ) { Icon(icon, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            text?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
+            onRetry?.let { FilledTonalIconButton(onClick = it) { Icon(Icons.Default.Refresh, "נסה שוב") } }
         }
     }
 }
 
 @Composable
-fun CenterMessage(text: String, action: String? = null, onAction: () -> Unit = {}) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text, color = Muted)
-            if (action != null) OutlinedButton(onClick = onAction) { Text(action) }
-        }
-    }
-}
+fun ErrorMessage(text: String, onRetry: () -> Unit) = CenterMessage(Icons.Default.Warning, text, onRetry)
 
 @Composable
 fun Loading() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 }
+
+@Composable
+fun SectionTitle(text: String, modifier: Modifier = Modifier) =
+    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = modifier)
