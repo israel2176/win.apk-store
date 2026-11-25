@@ -96,8 +96,9 @@ val ShieldIcon: ImageVector by lazy {
 /**
  * בידוד כיוון לפי התו החזק הראשון (FSI): כותרת באנגלית בתוך ממשק בעברית
  * נשארת מיושרת לימין, אבל הסימנים שלה ("!", ":") נשארים במקום הנכון.
+ * כותרת שיש בה עברית (גם אם מעורבת) נשארת כמו שהיא - בכיוון הרגיל של הממשק.
  */
-fun bidi(s: String) = "\u2068$s\u2069"
+fun bidi(s: String) = if (s.any { it in '\u0590'..'\u06FF' }) s else "\u2068$s\u2069"
 
 // ================= אייקון אפליקציה ודירוג =================
 
@@ -209,15 +210,16 @@ fun DownloadButton(
     modifier: Modifier = Modifier,
     price: String? = null,
     preregister: Boolean = false,
+    unavailable: Boolean = false,
     onDownload: () -> Unit,
     onInstall: (DlState.Ready) -> Unit,
     onShowDownloads: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val mod = modifier.height(48.dp)
-    if (state == null && (price != null || preregister)) {
+    if (state == null && (price != null || preregister || unavailable)) {
         Button(onClick = {}, mod, enabled = false) {
-            Text(price ?: "טרם יצאה · הרשמה מוקדמת")
+            Text(price ?: if (preregister) "טרם יצאה · הרשמה מוקדמת" else "לא זמין להורדה")
         }
         return
     }

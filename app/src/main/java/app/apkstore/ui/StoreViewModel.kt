@@ -16,6 +16,9 @@ import app.apkstore.data.AppSummary
 import app.apkstore.data.DlState
 import app.apkstore.data.Downloads
 import app.apkstore.data.NetFreeBlockException
+import app.apkstore.data.ApkPure
+import app.apkstore.data.ApkSource
+import app.apkstore.data.NotOnApkPureException
 import app.apkstore.data.PlayApi
 import app.apkstore.data.Review
 import app.apkstore.data.ReviewSort
@@ -61,6 +64,23 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     var loadingMore by mutableStateOf(false)
         private set
     val canLoadMore get() = searchNext != null
+
+    /**
+     * מה יש ב-APKPure לכל אפליקציה: Done(null) = אין שם קובץ בכלל.
+     * נבדק כשנכנסים לדף האפליקציה, כדי להציג מראש אם אפשר להוריד ואיזו גרסה.
+     */
+    val apkCache = mutableStateMapOf<String, Load<ApkSource?>>()
+
+    fun checkApk(pkg: String) {
+        val cur = apkCache[pkg]
+        if (cur != null && cur !is Load.Error) return
+        apkCache[pkg] = Load.Loading
+        viewModelScope.launch {
+            apkCache[pkg] = try { Load.Done(ApkPure.resolve(pkg)) }
+            catch (e: NotOnApkPureException) { Load.Done(null) }
+            catch (e: Exception) { Load.Error(errorText(e)) }
+        }
+    }
 
     /** ביקורות נוספות לכל אפליקציה (מעבר ל-20 שבדף) */
     val reviewsState = mutableStateMapOf<String, ReviewsState>()

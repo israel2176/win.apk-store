@@ -23,7 +23,7 @@ sealed class DlState {
     data class NotChecked(val pageUrl: String) : DlState()
     data class Blocked(val pageUrl: String) : DlState()
     data class Failed(val message: String) : DlState()
-    data class Ready(val path: String, val xapk: Boolean) : DlState()
+    data class Ready(val path: String, val xapk: Boolean, val version: String? = null) : DlState()
 }
 
 data class DownloadItem(val pkg: String, val title: String, val icon: String?, val state: DlState)
@@ -136,7 +136,7 @@ class Downloads(context: Context) {
         }
         target.delete()
         if (!part.renameTo(target)) throw IOException("שמירת הקובץ נכשלה")
-        return DlState.Ready(target.absolutePath, src.isXapk)
+        return DlState.Ready(target.absolutePath, src.isXapk, src.versionName)
     }
 
     private fun NfBlock.toState(): DlState = when (this) {
@@ -160,7 +160,7 @@ class Downloads(context: Context) {
         for (it in _items.value) {
             val o = JSONObject().put("pkg", it.pkg).put("title", it.title).put("icon", it.icon)
             when (val s = it.state) {
-                is DlState.Ready -> o.put("t", "ready").put("path", s.path).put("xapk", s.xapk)
+                is DlState.Ready -> o.put("t", "ready").put("path", s.path).put("xapk", s.xapk).put("ver", s.version)
                 is DlState.NotChecked -> o.put("t", "notchecked").put("page", s.pageUrl)
                 is DlState.Blocked -> o.put("t", "blocked").put("page", s.pageUrl)
                 is DlState.Failed -> o.put("t", "failed").put("msg", s.message)
@@ -178,7 +178,7 @@ class Downloads(context: Context) {
             val state = when (o.optString("t")) {
                 "ready" -> {
                     val path = o.optString("path")
-                    if (File(path).exists()) DlState.Ready(path, o.optBoolean("xapk"))
+                    if (File(path).exists()) DlState.Ready(path, o.optBoolean("xapk"), o.optString("ver").ifBlank { null })
                     else DlState.Failed("הקובץ נמחק")
                 }
                 "notchecked" -> DlState.NotChecked(o.optString("page"))

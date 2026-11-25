@@ -122,11 +122,32 @@ class ScreensTest {
     @Test @Config(sdk = [34], qualifiers = "w400dp-h1400dp-port-xxhdpi")
     fun appPagePaid() = appPage("full-app-paid", "com.mojang.minecraftpe")
 
-    private fun appPage(name: String, pkg: String = "com.waze") {
+    /** אפליקציה שקיימת בפליי ולא ב-APKPure */
+    @Test @Config(sdk = [34], qualifiers = "w400dp-h1100dp-port-xxhdpi")
+    fun appNotOnApkPure() = appPage("apk-missing", "com.payboxapp")
+
+    /** APKPure מעודכן: שורה שקטה עם גרסה, גודל ותאריך */
+    @Test @Config(sdk = [34], qualifiers = "w400dp-h1100dp-port-xxhdpi")
+    fun appOnApkPure() = appPage("apk-ok", "com.waze")
+
+    /** גרסה ישנה ב-APKPure (מדומה: מציבים גרסה ישנה במטמון לפני שהדף בודק) */
+    @Test @Config(sdk = [34], qualifiers = "w400dp-h1100dp-port-xxhdpi")
+    fun appOlderOnApkPure() = appPage("apk-older", "com.snapchat.android") { vm ->
+        vm.apkCache["com.snapchat.android"] = Load.Done(
+            app.apkstore.data.ApkSource(
+                "https://x", true, versionName = "13.90.0.0", size = 98_765_432,
+                updatedAt = System.currentTimeMillis() - 200L * 24 * 3600_000,
+            )
+        )
+    }
+
+    private fun appPage(name: String, pkg: String = "com.waze", prepare: (StoreViewModel) -> Unit = {}) {
         val vm = StoreViewModel(ApplicationProvider.getApplicationContext<Application>())
+        prepare(vm)
         rule.setContent { StoreRoot(vm) }
         rule.runOnIdle { vm.open(pkg) }
         waitFor("app", vm) { vm.detailsCache[pkg].let { it != null && it !is Load.Loading } }
+        waitFor("apk", vm) { vm.apkCache[pkg].let { it != null && it !is Load.Loading } || (vm.detailsCache[pkg] as? Load.Done)?.value?.free == false }
         settle(); shot(name)
     }
 }

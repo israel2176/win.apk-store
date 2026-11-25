@@ -30,6 +30,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
@@ -74,6 +76,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.apkstore.data.AppDetails
+import app.apkstore.data.Freshness
+import app.apkstore.data.Versions
 import app.apkstore.data.Review
 import app.apkstore.data.ReviewSort
 import app.apkstore.data.sizedImage
@@ -97,6 +101,9 @@ private fun date(ms: Long) = DateFormat.getDateInstance(DateFormat.MEDIUM, HE).f
 @Composable
 fun AppScreen(vm: StoreViewModel, pkg: String) {
     LaunchedEffect(pkg) { vm.loadDetails(pkg) }
+    // בודקים מראש מה יש ב-APKPure (רק לאפליקציה חינמית שכבר יצאה)
+    val loaded = (vm.detailsCache[pkg] as? Load.Done)?.value
+    LaunchedEffect(pkg, loaded != null) { if (loaded != null && loaded.free && !loaded.preregister) vm.checkApk(pkg) }
     val items by vm.downloads.items.collectAsState()
     val w = LocalWindow.current
     Column(Modifier.fillMaxSize()) {
@@ -109,6 +116,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                 val button: @Composable (Modifier) -> Unit = { mod ->
                     DownloadButton(
                         items.stateFor(pkg), mod, price = a.price, preregister = a.preregister,
+                        unavailable = (vm.apkCache[pkg] as? Load.Done)?.value == null && vm.apkCache[pkg] is Load.Done,
                         onDownload = { vm.download(pkg, a.title, a.icon) },
                         onInstall = vm::install,
                         onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -125,6 +133,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                             AppHeader(a, vertical = true)
                             StatsRow(a)
                             button(Modifier.fillMaxWidth())
+                            SourceInfo(a, vm)
                             DetailsPanel(a)
                             DeveloperPanel(a, vm)
                             Spacer(Modifier.height(Pad))
@@ -143,7 +152,12 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         item { Box(Modifier.padding(horizontal = Pad)) { AppHeader(a, vertical = false) } }
                         item { Box(Modifier.padding(horizontal = 12.dp)) { StatsRow(a) } }
-                        item { button(Modifier.fillMaxWidth().padding(horizontal = Pad)) }
+                        item {
+                            Column(Modifier.padding(horizontal = Pad), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                button(Modifier.fillMaxWidth())
+                                SourceInfo(a, vm)
+                            }
+                        }
                         a.video?.let { v -> item { Box(Modifier.padding(horizontal = Pad)) { VideoLink(v, vm) } } }
                         if (a.screenshots.isNotEmpty()) item { Screenshots(a.screenshots, w.shotHeight, Pad) }
                         contentSections(a, vm, padded = true)
@@ -165,6 +179,70 @@ private fun LazyListScope.contentSections(a: AppDetails, vm: StoreViewModel, pad
     if (a.dataSafety.isNotEmpty()) item { Box(m) { DataSafetyPanel(a) } }
     if (a.permissions.isNotEmpty()) item { Box(m) { PermissionsPanel(a) } }
     if (a.similar.isNotEmpty()) item { SimilarPanel(a, vm, padded) }
+}
+
+// ================= מקור ההורדה (APKPure) =================
+
+private fun mb(bytes: Long) = ltr("%.1f MB".format(bytes / 1_048_576.0))
+
+/**
+ * מה יש ב-APKPure, מתחת לכפתור ההורדה:
+ * - אין שם קובץ בכלל: הודעה אדומה, והכפתור "לא זמין להורדה"
+ * - יש, אבל גרסה ישנה יותר מבפליי: הודעה כתומה עם שתי הגרסאות (או התאריכים)
+ * - יש ומעודכן: שורה שקטה עם גרסה, גודל, סוג ותאריך
+ */
+@Composable
+private fun SourceInfo(a: AppDetails, vm: StoreViewModel) {
+    if (!a.free || a.preregister) return
+    val cs = MaterialTheme.colorScheme
+    when (val s = vm.apkCache[a.pkg]) {
+        null, is Load.Loading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            Text("בודק זמינות ב-APKPure…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
+        is Load.Error -> Note(Icons.Default.Warning, cs.surfaceContainerHigh, cs.onSurfaceVariant,
+            "לא ניתן לבדוק כרגע אם האפליקציה זמינה ב-APKPure", s.message)
+        is Load.Done -> {
+            val src = s.value
+            if (src == null) {
+                Note(Icons.Default.Warning, cs.errorContainer, cs.onErrorContainer,
+                    "האפליקציה לא זמינה ב-APKPure",
+                    "אין ממנה קובץ להורדה, ולכן אי אפשר להוריד אותה דרך החנות.")
+                return
+            }
+            val facts = listOfNotNull(
+                src.versionName?.let { ltr("v$it") },
+                src.size?.let(::mb),
+                if (src.isXapk) "XAPK" else "APK",
+                src.updatedAt?.let(::date),
+            ).joinToString(" · ") { "\u2068$it\u2069" } // כל פרט מבודד, כדי שהתאריך לא יתערבב
+            when (Versions.freshness(src, a.version, a.updatedAt)) {
+                Freshness.Older -> Note(
+                    Icons.Default.Warning, cs.tertiaryContainer, cs.onTertiaryContainer,
+                    "ב-APKPure יש גרסה ישנה יותר מבפליי",
+                    if (a.version != null && src.versionName != null)
+                        "ב-APKPure: ${ltr("v" + src.versionName)} · בפליי: ${ltr("v" + a.version)}\nאפשר להוריד בכל זאת את הגרסה הקיימת."
+                    else "הגרסה ב-APKPure עלתה ב-${src.updatedAt?.let(::date)}, ובפליי האפליקציה עודכנה ב-${a.updated}.\nאפשר להוריד בכל זאת את הגרסה הקיימת.",
+                )
+                Freshness.Newer -> IconLine(Icons.Default.Check, "$facts · חדשה מהגרסה שבפליי")
+                else -> IconLine(Icons.Default.Check, facts)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Note(icon: ImageVector, bg: Color, fg: Color, title: String, body: String?) {
+    Row(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(bg).padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(icon, null, Modifier.size(20.dp), tint = fg)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = fg, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            body?.let { Text(it, color = fg, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
 }
 
 /** סרטון האפליקציה (יוטיוב) - נפתח באפליקציה החיצונית */

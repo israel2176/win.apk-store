@@ -375,7 +375,7 @@ private fun ActiveCard(item: DownloadItem, vm: StoreViewModel) {
 private fun ReadyCard(item: DownloadItem, vm: StoreViewModel) {
     val s = item.state as DlState.Ready
     CardShell(MaterialTheme.colorScheme.surfaceContainerLow) {
-        CardHeader(item, if (s.xapk) "XAPK" else "APK", MaterialTheme.colorScheme.onSurfaceVariant, onRemove = { vm.remove(item.pkg) }) {
+        CardHeader(item, listOfNotNull(s.version?.let { "\u2066v$it\u2069" }, if (s.xapk) "XAPK" else "APK").joinToString(" · "), MaterialTheme.colorScheme.onSurfaceVariant, onRemove = { vm.remove(item.pkg) }) {
             Button(onClick = { vm.install(s) }) { Icon(InstallIcon, "התקנה") }
         }
     }
