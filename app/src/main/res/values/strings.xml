@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- English is the default; Hebrew is in values-iw. The system language picks one. -->
-    <string name="app_name">APK Store</string>
+    <string name="app_name">Store</string>
     <string name="nav_home">Home</string>
     <string name="nav_search">Search</string>
     <string name="nav_downloads">Downloads</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">חנות אפליקציות</string>
+    <string name="app_name">חנות</string>
     <string name="nav_home">ראשי</string>
     <string name="nav_search">חיפוש</string>
     <string name="nav_downloads">הורדות</string>
