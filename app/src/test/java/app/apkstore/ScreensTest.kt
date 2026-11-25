@@ -1,14 +1,20 @@
 package app.apkstore
 
 import android.app.Application
+import android.content.Context
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
+import app.apkstore.data.AppSummary
+import app.apkstore.data.PlayApi
 import app.apkstore.ui.Load
 import app.apkstore.ui.StoreViewModel
 import app.apkstore.ui.Tab
 import com.github.takahirom.roborazzi.captureRoboImage
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +22,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
 
 /**
  * צילומי מסך של כל המסכים בכמה גדלי חלון, עם נתונים אמיתיים מפליי (דורש אינטרנט).
@@ -74,4 +81,33 @@ class ScreensTest {
 
     @Test @Config(sdk = [34], qualifiers = "w400dp-h860dp-port-night-xxhdpi")
     fun phoneDark() = tour("phone-dark")
+
+    /** מסך ההורדות עם כל המצבים: ממתין לבדיקת נטפרי, חסום, נכשל, מוכן להתקנה */
+    @Test @Config(sdk = [34], qualifiers = "w400dp-h860dp-port-xxhdpi")
+    fun downloadStates() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val apps = runBlocking { PlayApi.search("waze") }.take(4)
+        val dir = File(app.getExternalFilesDir(null) ?: app.filesDir, "apks").apply { mkdirs() }
+        val apk = File(dir, "${apps[0].pkg}.apk").apply { writeText("x") }
+        fun item(a: AppSummary) = JSONObject().put("pkg", a.pkg).put("title", a.title).put("icon", a.icon)
+        val list = JSONArray()
+            .put(item(apps[1]).put("t", "notchecked").put("page", "https://netfree.link/block/#{}"))
+            .put(item(apps[2]).put("t", "blocked").put("page", "https://netfree.link/block/#{}"))
+            .put(item(apps[3]).put("t", "failed").put("msg", "לא נמצא קובץ להורדה"))
+            .put(item(apps[0]).put("t", "ready").put("path", apk.absolutePath).put("xapk", false))
+        app.getSharedPreferences("downloads", Context.MODE_PRIVATE).edit().putString("items", list.toString()).commit()
+
+        val vm = StoreViewModel(app)
+        rule.setContent { StoreRoot(vm) }
+        rule.runOnIdle { vm.selectTab(Tab.Downloads) }
+        settle(); shot("flow-downloads")
+
+        rule.runOnIdle { vm.search("waze") }
+        waitFor("search", vm) { vm.results !is Load.Loading }
+        settle(); shot("flow-search")
+
+        rule.runOnIdle { vm.open(apps[0].pkg) }
+        waitFor("app", vm) { vm.detailsCache[apps[0].pkg].let { it != null && it !is Load.Loading } }
+        settle(); shot("flow-app-ready")
+    }
 }
