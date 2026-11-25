@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.apkstore.data.AppSummary
+import app.apkstore.data.InstalledApp
+import app.apkstore.data.Versions
 import app.apkstore.data.DlState
 import app.apkstore.data.screenshotImage
 import app.apkstore.data.sizedImage
@@ -74,14 +76,25 @@ val DownloadIcon: ImageVector by lazy {
     }
 }
 
-/** חבילה עם חץ - "התקנה" */
+/** טלפון עם חץ פנימה - "התקנה" (שונה מחץ ההורדה) */
 val InstallIcon: ImageVector by lazy {
-    icon("install") {
-        moveTo(19f, 3f); horizontalLineTo(5f); curveTo(3.9f, 3f, 3f, 3.9f, 3f, 5f); verticalLineToRelative(14f)
-        curveToRelative(0f, 1.1f, 0.9f, 2f, 2f, 2f); horizontalLineToRelative(14f); curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
-        verticalLineTo(5f); curveToRelative(0f, -1.1f, -0.9f, -2f, -2f, -2f); close()
-        moveTo(12f, 17f); lineToRelative(-5f, -5f); horizontalLineToRelative(3f); verticalLineTo(7f)
-        horizontalLineToRelative(4f); verticalLineToRelative(5f); horizontalLineToRelative(3f); close()
+    ImageVector.Builder("install", 24.dp, 24.dp, 24f, 24f).path(fill = SolidColor(Color.Black), pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd) {
+        moveTo(8f, 1f); horizontalLineTo(16f); curveTo(17.1f, 1f, 18f, 1.9f, 18f, 3f); verticalLineTo(21f)
+        curveTo(18f, 22.1f, 17.1f, 23f, 16f, 23f); horizontalLineTo(8f); curveTo(6.9f, 23f, 6f, 22.1f, 6f, 21f); verticalLineTo(3f)
+        curveTo(6f, 1.9f, 6.9f, 1f, 8f, 1f); close()
+        moveTo(8f, 4f); verticalLineTo(19f); horizontalLineTo(16f); verticalLineTo(4f); close()
+        moveTo(11f, 6f); horizontalLineTo(13f); verticalLineTo(11f); horizontalLineTo(15.5f); lineTo(12f, 15f); lineTo(8.5f, 11f); horizontalLineTo(11f); close()
+    }.build()
+}
+
+/** ריבוע עם חץ החוצה - "פתיחה" */
+val OpenIcon: ImageVector by lazy {
+    icon("open") {
+        moveTo(19f, 19f); horizontalLineTo(5f); verticalLineTo(5f); horizontalLineToRelative(7f); verticalLineTo(3f); horizontalLineTo(5f)
+        curveToRelative(-1.11f, 0f, -2f, 0.9f, -2f, 2f); verticalLineToRelative(14f); curveToRelative(0f, 1.1f, 0.89f, 2f, 2f, 2f)
+        horizontalLineToRelative(14f); curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f); verticalLineToRelative(-7f); horizontalLineToRelative(-2f); close()
+        moveTo(14f, 3f); verticalLineToRelative(2f); horizontalLineToRelative(3.59f); lineToRelative(-9.83f, 9.83f); lineToRelative(1.41f, 1.41f)
+        lineTo(19f, 6.41f); verticalLineTo(10f); horizontalLineToRelative(2f); verticalLineTo(3f); close()
     }
 }
 
@@ -133,7 +146,10 @@ fun Rating(score: Double?, modifier: Modifier = Modifier) {
 
 /** שורת אפליקציה ברשימה: אייקון, שם, מפתח, דירוג, וכפתור הורדה עגול */
 @Composable
-fun AppRow(app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: () -> Unit, onInstall: (DlState.Ready) -> Unit, onShowDownloads: () -> Unit) {
+fun AppRow(
+    app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: () -> Unit, onInstall: (DlState.Ready) -> Unit, onShowDownloads: () -> Unit,
+    installed: InstalledApp? = null, onOpen: () -> Unit = {}, onProblem: () -> Unit = {},
+) {
     Row(
         Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -152,7 +168,7 @@ fun AppRow(app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: ()
             }
         }
         // אפליקציה בתשלום: מציגים את המחיר ולא מורידים
-        if (app.price != null) PricePill(app.price) else DownloadIconButton(state, onDownload, onInstall, onShowDownloads)
+        if (app.price != null && installed == null) PricePill(app.price) else DownloadIconButton(state, onDownload, onInstall, onShowDownloads, installed, onOpen, onProblem)
     }
 }
 
@@ -168,28 +184,66 @@ fun GenrePill(text: String) {
 
 // ================= כפתורי הורדה =================
 
+/**
+ * מה הכפתור מציע, לפי מצב ההורדה ומה שמותקן בטלפון:
+ * הורדה → (מוריד) → התקנה → פתיחה. אם מותקנת גרסה ישנה: עדכון.
+ */
+enum class Act { Download, Progress, NetFree, Failed, Install, UpdateInstall, UpdateDownload, Open }
+
+fun actOf(state: DlState?, installed: InstalledApp?, updateAvailable: Boolean = false): Act = when (state) {
+    is DlState.Preparing, is DlState.Downloading -> Act.Progress
+    is DlState.NotChecked, is DlState.Blocked -> Act.NetFree
+    is DlState.Failed -> if (installed != null) Act.Open else Act.Failed
+    is DlState.Ready -> when {
+        installed == null -> Act.Install
+        // הקובץ שירד חדש מהמותקן (או שאי אפשר להשוות) - מציעים לעדכן; אחרת כבר מותקן
+        (state.version?.let { v -> installed.versionName?.let { Versions.compare(v, it) } } ?: 1) > 0 -> Act.UpdateInstall
+        else -> Act.Open
+    }
+    null -> when {
+        installed == null -> Act.Download
+        updateAvailable -> Act.UpdateDownload
+        else -> Act.Open
+    }
+}
+
 /** כפתור עגול בלי טקסט - לרשימות */
 @Composable
-fun DownloadIconButton(state: DlState?, onDownload: () -> Unit, onInstall: (DlState.Ready) -> Unit, onShowDownloads: () -> Unit) {
+fun DownloadIconButton(
+    state: DlState?,
+    onDownload: () -> Unit,
+    onInstall: (DlState.Ready) -> Unit,
+    onShowDownloads: () -> Unit,
+    installed: InstalledApp? = null,
+    onOpen: () -> Unit = {},
+    onProblem: () -> Unit = {},
+) {
     val cs = MaterialTheme.colorScheme
-    when (state) {
-        is DlState.Ready -> FilledTonalIconButton(
-            onClick = { onInstall(state) },
-            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.primary, contentColor = cs.onPrimary),
-        ) { Icon(InstallIcon, stringResource(R.string.install)) }
-        is DlState.Preparing, is DlState.Downloading -> Box(Modifier.size(48.dp).clickable(onClick = onShowDownloads), contentAlignment = Alignment.Center) {
+    val filled = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.primary, contentColor = cs.onPrimary)
+    when (actOf(state, installed)) {
+        Act.Install, Act.UpdateInstall -> FilledTonalIconButton(onClick = { onInstall(state as DlState.Ready) }, colors = filled) {
+            Icon(if (installed != null) Icons.Default.Refresh else InstallIcon, stringResource(if (installed != null) R.string.update else R.string.install))
+        }
+        Act.Open -> FilledTonalIconButton(onClick = onOpen) { Icon(OpenIcon, stringResource(R.string.open)) }
+        Act.UpdateDownload -> FilledTonalIconButton(onClick = onDownload, colors = filled) { Icon(Icons.Default.Refresh, stringResource(R.string.update)) }
+        Act.Progress -> Box(Modifier.size(48.dp).clickable(onClick = onShowDownloads), contentAlignment = Alignment.Center) {
             val p = (state as? DlState.Downloading)?.progress ?: -1f
             if (p >= 0) CircularProgressIndicator(progress = { p }, Modifier.size(34.dp), strokeWidth = 3.dp, trackColor = cs.surfaceContainerHighest)
             else CircularProgressIndicator(Modifier.size(34.dp), strokeWidth = 3.dp)
         }
-        is DlState.NotChecked, is DlState.Blocked -> FilledTonalIconButton(
+        Act.NetFree -> FilledTonalIconButton(
             onClick = onShowDownloads,
             colors = IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = if (state is DlState.NotChecked) cs.tertiaryContainer else cs.errorContainer,
                 contentColor = if (state is DlState.NotChecked) cs.onTertiaryContainer else cs.onErrorContainer,
             ),
         ) { Icon(ShieldIcon, stringResource(R.string.netfree)) }
-        else -> FilledTonalIconButton(onClick = onDownload) { Icon(DownloadIcon, stringResource(R.string.download)) }
+        // נכשל: סמל אזהרה אדום. לחיצה מציגה שוב את הסיבה, עם "נסה שוב"
+        Act.Failed -> FilledTonalIconButton(
+            onClick = onProblem,
+            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
+        ) { Icon(Icons.Default.Warning, stringResource(R.string.failed_retry)) }
+        Act.Download -> FilledTonalIconButton(onClick = onDownload) { Icon(DownloadIcon, stringResource(R.string.download)) }
     }
 }
 
@@ -207,6 +261,7 @@ fun PricePill(price: String) {
  * כפתור רחב - בדף האפליקציה ובתוצאה הראשונה.
  * price != null: אפליקציה בתשלום - לא מורידים, רק מציגים את המחיר.
  * preregister: עוד לא יצאה - הרשמה מוקדמת בלבד.
+ * installed / updateAvailable: מה מותקן בטלפון, והאם יש גרסה חדשה יותר להורדה.
  */
 @Composable
 fun DownloadButton(
@@ -215,41 +270,48 @@ fun DownloadButton(
     price: String? = null,
     preregister: Boolean = false,
     unavailable: Boolean = false,
+    installed: InstalledApp? = null,
+    updateAvailable: Boolean = false,
     onDownload: () -> Unit,
     onInstall: (DlState.Ready) -> Unit,
     onShowDownloads: () -> Unit,
+    onOpen: () -> Unit = {},
+    onRetry: () -> Unit = onDownload,
 ) {
     val cs = MaterialTheme.colorScheme
     val mod = modifier.height(48.dp)
-    if (state == null && (price != null || preregister || unavailable)) {
+    if (state == null && installed == null && (price != null || preregister || unavailable)) {
         Button(onClick = {}, mod, enabled = false) {
             Text(price ?: stringResource(if (preregister) R.string.preregister else R.string.unavailable))
         }
         return
     }
-    when (state) {
-        is DlState.Ready -> Button(onClick = { onInstall(state) }, mod) {
-            Icon(InstallIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.install))
-        }
-        is DlState.Preparing, is DlState.Downloading -> OutlinedButton(onClick = onShowDownloads, mod) {
+    @Composable fun Label(icon: ImageVector, text: Int) {
+        Icon(icon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(text))
+    }
+    when (actOf(state, installed, updateAvailable && !unavailable)) {
+        Act.Install -> Button(onClick = { onInstall(state as DlState.Ready) }, mod) { Label(InstallIcon, R.string.install) }
+        Act.UpdateInstall -> Button(onClick = { onInstall(state as DlState.Ready) }, mod) { Label(Icons.Default.Refresh, R.string.update) }
+        Act.UpdateDownload -> Button(onClick = onDownload, mod) { Label(Icons.Default.Refresh, R.string.update) }
+        Act.Open -> androidx.compose.material3.FilledTonalButton(onClick = onOpen, mod) { Label(OpenIcon, R.string.open) }
+        Act.Progress -> OutlinedButton(onClick = onShowDownloads, mod) {
             val p = (state as? DlState.Downloading)?.progress ?: -1f
             if (p >= 0) CircularProgressIndicator(progress = { p }, Modifier.size(20.dp), strokeWidth = 2.5.dp)
             else CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.5.dp)
             if (p >= 0) { Spacer(Modifier.width(10.dp)); Text("${(p * 100).toInt()}%") }
         }
-        is DlState.NotChecked, is DlState.Blocked -> Button(
+        Act.NetFree -> Button(
             onClick = onShowDownloads, mod,
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                 containerColor = if (state is DlState.NotChecked) cs.tertiaryContainer else cs.errorContainer,
                 contentColor = if (state is DlState.NotChecked) cs.onTertiaryContainer else cs.onErrorContainer,
             ),
-        ) {
-            Icon(ShieldIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
-            Text(stringResource(if (state is DlState.NotChecked) R.string.dl_pending_check else R.string.dl_blocked))
-        }
-        else -> Button(onClick = onDownload, mod) {
-            Icon(DownloadIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.download))
-        }
+        ) { Label(ShieldIcon, if (state is DlState.NotChecked) R.string.dl_pending_check else R.string.dl_blocked) }
+        Act.Failed -> Button(
+            onClick = onRetry, mod,
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
+        ) { Label(Icons.Default.Refresh, R.string.failed_retry) }
+        Act.Download -> Button(onClick = onDownload, mod) { Label(DownloadIcon, R.string.download) }
     }
 }
 

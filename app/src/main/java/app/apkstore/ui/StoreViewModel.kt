@@ -22,6 +22,14 @@ import app.apkstore.data.localized
 import app.apkstore.data.ApkSource
 import app.apkstore.data.NotOnApkPureException
 import app.apkstore.data.PlayApi
+import app.apkstore.data.DownloadItem
+import app.apkstore.data.InstalledApps
+import app.apkstore.data.sizedImage
+import androidx.core.graphics.drawable.toBitmap
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import kotlinx.coroutines.flow.MutableSharedFlow
 import app.apkstore.data.Review
 import app.apkstore.data.ReviewSort
 import app.apkstore.install.Installer
@@ -50,6 +58,13 @@ sealed class Load<out T> {
 
 class StoreViewModel(app: Application) : AndroidViewModel(app) {
     val downloads = Downloads(app)
+
+    /** מה מותקן בטלפון - כדי להציג "פתיחה" / "עדכון" במקום "הורדה" */
+    val installed = InstalledApps(app)
+
+    /** הודעה בתחתית המסך (Snackbar); retryPkg != null = עם כפתור "נסה שוב" */
+    data class Snack(val text: String, val retryPkg: String? = null)
+    val snacks = MutableSharedFlow<Snack>(extraBufferCapacity = 4)
 
     var tab by mutableStateOf(Tab.Home)
     val detailStack = mutableStateListOf<String>()
@@ -99,7 +114,32 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun str(id: Int, vararg args: Any) = getApplication<Application>().getString(id, *args)
 
-    init { loadHome() }
+    init {
+        loadHome()
+        // הורדה שנכשלה - מודיעים מיד, בכל מסך שבו נמצאים
+        viewModelScope.launch { downloads.problems.collect { snacks.emit(problemSnack(it)) } }
+    }
+
+    private fun problemSnack(item: DownloadItem): Snack {
+        val why = when (val s = item.state) {
+            is DlState.Failed -> s.message
+            is DlState.NotChecked -> str(R.string.nf_not_checked)
+            is DlState.Blocked -> str(R.string.nf_blocked)
+            else -> str(R.string.err_generic)
+        }
+        // לחסימת נטפרי אין טעם לנסות שוב מיד - מפנים למסך ההורדות
+        // שם האפליקציה מבודד (אנגלית בתוך עברית); "נסה שוב" רק כשיש בזה טעם
+        return Snack("\u2068${item.title}\u2069: $why", item.pkg.takeIf { (item.state as? DlState.Failed)?.retryable == true })
+    }
+
+    /** לחיצה על סמל השגיאה ברשימה - מציג שוב את הסיבה */
+    fun showProblem(pkg: String) {
+        downloads.items.value.firstOrNull { it.pkg == pkg }?.let { snacks.tryEmit(problemSnack(it)) }
+    }
+
+    fun openApp(pkg: String) {
+        if (!installed.open(pkg)) Toast.makeText(getApplication(), str(R.string.cant_open), Toast.LENGTH_SHORT).show()
+    }
 
     fun loadHome() {
         home = Load.Loading
@@ -187,9 +227,16 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
 
     fun install(state: DlState.Ready) {
         val ctx = getApplication<Application>()
+        val item = downloads.items.value.firstOrNull { it.state == state } ?: return
         viewModelScope.launch {
-            try { Installer.install(ctx, state.path, state.xapk) }
-            catch (e: Exception) { Toast.makeText(ctx, e.localized(ctx), Toast.LENGTH_LONG).show() }
+            try {
+                // האייקון מפליי, כדי שמסך ההתקנה של המערכת יציג אותו עם השם
+                val icon = runCatching {
+                    val req = ImageRequest.Builder(ctx).data(sizedImage(item.icon, 192)).allowHardware(false).build()
+                    (ctx.imageLoader.execute(req) as? SuccessResult)?.drawable?.toBitmap()
+                }.getOrNull()
+                Installer.install(ctx, state.path, state.xapk, item.pkg, item.title, icon)
+            } catch (e: Exception) { Toast.makeText(ctx, e.localized(ctx), Toast.LENGTH_LONG).show() }
         }
     }
 

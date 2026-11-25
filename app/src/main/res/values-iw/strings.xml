@@ -76,4 +76,9 @@
     <string name="install_allow">יש לאשר התקנת אפליקציות ואז ללחוץ שוב על התקנה</string>
     <string name="err_xapk_empty">לא נמצאו קבצי APK בתוך ה-XAPK</string>
     <string name="installed">האפליקציה הותקנה</string>
+    <string name="installed_named">%1$s הותקנה</string>
+    <string name="open">פתיחה</string>
+    <string name="update">עדכון</string>
+    <string name="failed_retry">נכשל · נסה שוב</string>
+    <string name="cant_open">אי אפשר לפתוח את האפליקציה הזו מכאן</string>
 </resources>

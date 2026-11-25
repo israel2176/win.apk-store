@@ -77,4 +77,9 @@
     <string name="install_allow">Allow installing apps, then tap Install again</string>
     <string name="err_xapk_empty">No APK files were found inside the XAPK</string>
     <string name="installed">App installed</string>
+    <string name="installed_named">%1$s was installed</string>
+    <string name="open">Open</string>
+    <string name="update">Update</string>
+    <string name="failed_retry">Failed · Try again</string>
+    <string name="cant_open">This app can\'t be opened from here</string>
 </resources>

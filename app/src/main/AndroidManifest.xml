@@ -3,6 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- חנות צריכה לדעת אילו אפליקציות מותקנות, כדי להציג "פתיחה" או "עדכון" -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        xmlns:tools="http://schemas.android.com/tools" tools:ignore="QueryAllPackagesPermission" />
+    <!-- עדכון של אפליקציה שהחנות התקינה - בלי לבקש אישור שוב (אנדרואיד 12+) -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- מתקין חבילות: ניתנת רק בסביבה שמאפשרת זאת. עם ההרשאה - התקנה שקטה, והמתקין הרשום הוא Google Play -->
+    <uses-permission android:name="android.permission.INSTALL_PACKAGES"
+        xmlns:tools="http://schemas.android.com/tools" tools:ignore="ProtectedPermissions" />
 
     <application
         android:label="@string/app_name"

@@ -1,5 +1,13 @@
 package app.apkstore
 
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.res.stringResource
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -88,6 +96,18 @@ fun StoreApp(vm: StoreViewModel = viewModel()) {
     val window = LocalWindow.current
     val detail = vm.detailStack.lastOrNull()
     val downloads by vm.downloads.items.collectAsState()
+
+    // הודעות בתחתית המסך: הורדה שנכשלה, עם "נסה שוב"
+    val snackbar = remember { SnackbarHostState() }
+    val retryLabel = stringResource(R.string.retry)
+    LaunchedEffect(Unit) {
+        vm.snacks.collect { m ->
+            val r = snackbar.showSnackbar(m.text, actionLabel = m.retryPkg?.let { retryLabel }, withDismissAction = true, duration = SnackbarDuration.Long)
+            if (r == SnackbarResult.ActionPerformed) m.retryPkg?.let(vm::retry)
+        }
+    }
+    // חזרה לאפליקציה (למשל אחרי התקנה או מחיקה) - בודקים שוב מה מותקן
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.installed.refreshAll() }
     // מספר על לשונית ההורדות: כמה מוכנות להתקנה או דורשות טיפול
     val badge = downloads.count { it.state !is DlState.Preparing && it.state !is DlState.Downloading }
     val active = downloads.any { it.state is DlState.Preparing || it.state is DlState.Downloading }
@@ -124,6 +144,7 @@ fun StoreApp(vm: StoreViewModel = viewModel()) {
         // טלפון לאורך: סרגל תחתון, תוויות רק ללשונית הנבחרת
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
+            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                     destinations.forEach { d ->
@@ -140,7 +161,7 @@ fun StoreApp(vm: StoreViewModel = viewModel()) {
         ) { pad -> content(Modifier.padding(pad).fillMaxSize()) }
     } else {
         // מסך רחב / לרוחב: סרגל צד, ללא תוויות
-        Scaffold(containerColor = MaterialTheme.colorScheme.surface) { pad ->
+        Scaffold(containerColor = MaterialTheme.colorScheme.surface, snackbarHost = { SnackbarHost(snackbar) }) { pad ->
             Row(Modifier.padding(pad).fillMaxSize()) {
                 NavigationRail(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,

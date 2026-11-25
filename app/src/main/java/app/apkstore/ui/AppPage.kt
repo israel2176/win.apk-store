@@ -104,6 +104,9 @@ private fun date(ms: Long) = DateFormat.getDateInstance(DateFormat.MEDIUM, HE).f
 fun AppScreen(vm: StoreViewModel, pkg: String) {
     LaunchedEffect(pkg) { vm.loadDetails(pkg) }
     // בודקים מראש מה יש ב-APKPure (רק לאפליקציה חינמית שכבר יצאה)
+    val inst = vm.installed.state.collectAsState().value[pkg]
+    LaunchedEffect(pkg) { vm.installed.track(pkg) }
+    val apk = (vm.apkCache[pkg] as? Load.Done)?.value
     val loaded = (vm.detailsCache[pkg] as? Load.Done)?.value
     LaunchedEffect(pkg, loaded != null) { if (loaded != null && loaded.free && !loaded.preregister) vm.checkApk(pkg) }
     val items by vm.downloads.items.collectAsState()
@@ -118,6 +121,11 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                 val button: @Composable (Modifier) -> Unit = { mod ->
                     DownloadButton(
                         items.stateFor(pkg), mod, price = a.price, preregister = a.preregister,
+                        installed = inst,
+                        // יש עדכון: הגרסה ב-APKPure חדשה מהמותקנת
+                        updateAvailable = inst != null && apk?.versionCode?.let { it > inst.versionCode } == true,
+                        onOpen = { vm.openApp(pkg) },
+                        onRetry = { vm.retry(pkg) },
                         unavailable = (vm.apkCache[pkg] as? Load.Done)?.value == null && vm.apkCache[pkg] is Load.Done,
                         onDownload = { vm.download(pkg, a.title, a.icon) },
                         onInstall = vm::install,

@@ -191,6 +191,7 @@ internal fun AppTile(app: AppSummary, size: Dp, onClick: () -> Unit) {
 @Composable
 fun SearchScreen(vm: StoreViewModel) {
     val items by vm.downloads.items.collectAsState()
+    val installed by vm.installed.state.collectAsState()
     val w = LocalWindow.current
     Column(Modifier.fillMaxSize()) {
         SearchBar(vm, autoFocus = vm.results == null)
@@ -207,12 +208,16 @@ fun SearchScreen(vm: StoreViewModel) {
                 val first = r.value.first()
                 fullLine(first.pkg) { TopResult(first, items.stateFor(first.pkg), vm) }
                 items(r.value.drop(1), key = { it.pkg }) { app ->
+                    LaunchedEffect(app.pkg) { vm.installed.track(app.pkg) }
                     AppRow(
                         app, items.stateFor(app.pkg),
                         onClick = { vm.open(app.pkg) },
                         onDownload = { vm.download(app.pkg, app.title, app.icon) },
                         onInstall = vm::install,
                         onShowDownloads = { vm.selectTab(Tab.Downloads) },
+                        installed = installed[app.pkg],
+                        onOpen = { vm.openApp(app.pkg) },
+                        onProblem = { vm.showProblem(app.pkg) },
                     )
                 }
                 // סוף הרשימה: טוען עוד תוצאות (כמו גלילה בפליי)
@@ -231,6 +236,8 @@ fun SearchScreen(vm: StoreViewModel) {
 @Composable
 private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
     val w = LocalWindow.current
+    val inst = vm.installed.state.collectAsState().value[app.pkg]
+    LaunchedEffect(app.pkg) { vm.installed.track(app.pkg) }
     Column(
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceContainerLow).padding(vertical = Gutter),
@@ -252,7 +259,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
             }
             // ברוחב - הכפתור בצד; בטלפון - מתחת
             if (!w.compact) DownloadButton(
-                state, Modifier.widthIn(min = 160.dp), price = app.price,
+                state, Modifier.widthIn(min = 160.dp), price = app.price, installed = inst, onOpen = { vm.openApp(app.pkg) }, onRetry = { vm.retry(app.pkg) },
                 onDownload = { vm.download(app.pkg, app.title, app.icon) },
                 onInstall = vm::install,
                 onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -260,7 +267,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
         }
         if (app.screenshots.isNotEmpty()) Screenshots(app.screenshots, w.shotHeight * 0.75f, Gutter)
         if (w.compact) DownloadButton(
-            state, Modifier.fillMaxWidth().padding(horizontal = Gutter), price = app.price,
+            state, Modifier.fillMaxWidth().padding(horizontal = Gutter), price = app.price, installed = inst, onOpen = { vm.openApp(app.pkg) }, onRetry = { vm.retry(app.pkg) },
             onDownload = { vm.download(app.pkg, app.title, app.icon) },
             onInstall = vm::install,
             onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -377,8 +384,11 @@ private fun ActiveCard(item: DownloadItem, vm: StoreViewModel) {
 private fun ReadyCard(item: DownloadItem, vm: StoreViewModel) {
     val s = item.state as DlState.Ready
     CardShell(MaterialTheme.colorScheme.surfaceContainerLow) {
+        val inst = vm.installed.state.collectAsState().value[item.pkg]
+        LaunchedEffect(item.pkg) { vm.installed.track(item.pkg) }
         CardHeader(item, listOfNotNull(s.version?.let { "\u2066v$it\u2069" }, if (s.xapk) "XAPK" else "APK").joinToString(" · "), MaterialTheme.colorScheme.onSurfaceVariant, onRemove = { vm.remove(item.pkg) }) {
-            Button(onClick = { vm.install(s) }) { Icon(InstallIcon, stringResource(R.string.install)) }
+            // מוכן להתקנה / עדכון, או - אם כבר הותקן - פתיחה
+            DownloadIconButton(s, onDownload = {}, onInstall = vm::install, onShowDownloads = {}, installed = inst, onOpen = { vm.openApp(item.pkg) })
         }
     }
 }

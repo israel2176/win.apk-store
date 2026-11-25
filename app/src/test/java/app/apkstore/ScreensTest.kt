@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
 import app.apkstore.data.AppSummary
 import app.apkstore.data.PlayApi
+import app.apkstore.R
 import app.apkstore.ui.Load
 import app.apkstore.ui.StoreViewModel
 import app.apkstore.ui.Tab
@@ -151,6 +152,50 @@ class ScreensTest {
 
     @Test @Config(sdk = [34], qualifiers = "en-rUS-w1280dp-h800dp-land-xhdpi")
     fun tabletEnglish() = tour("en-tablet")
+
+    /** אפליקציה מותקנת בטלפון (מדומה) */
+    private fun fakeInstall(pkg: String, version: String, code: Long) {
+        val pi = android.content.pm.PackageInfo().apply {
+            packageName = pkg; versionName = version; longVersionCode = code
+            applicationInfo = android.content.pm.ApplicationInfo().apply { packageName = pkg }
+        }
+        shadowOf(ApplicationProvider.getApplicationContext<Application>().packageManager).installPackage(pi)
+    }
+
+    /**
+     * רשימת חיפוש עם כל המצבים: מותקנת (פתיחה), ירד קובץ חדש מהמותקן (עדכון),
+     * הורדה שנכשלה (סמל אזהרה + הודעה בתחתית עם "נסה שוב")
+     */
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h860dp-port-xxhdpi")
+    fun installStates() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val apps = runBlocking { PlayApi.search("waze") }.items
+        val waze = apps.first { it.pkg == "com.waze" }
+        val others = apps.filter { it.pkg != "com.waze" && it.price == null }.take(3)
+        fakeInstall(waze.pkg, "5.27.5.0", 1030750)          // מותקנת, אין חדש -> פתיחה
+        fakeInstall(others[0].pkg, "1.0", 1)                // מותקנת ישנה + ירד קובץ חדש -> עדכון
+        val dir = File(app.getExternalFilesDir(null) ?: app.filesDir, "apks").apply { mkdirs() }
+        val apk = File(dir, "${others[0].pkg}.apk").apply { writeText("x") }
+        fun item(a: AppSummary) = JSONObject().put("pkg", a.pkg).put("title", a.title).put("icon", a.icon)
+        val list = JSONArray()
+            .put(item(others[0]).put("t", "ready").put("path", apk.absolutePath).put("xapk", false).put("ver", "99.0"))
+            .put(item(others[1]).put("t", "failed").put("msg", app.getString(R.string.err_apkpure_missing)))
+        app.getSharedPreferences("downloads", Context.MODE_PRIVATE).edit().putString("items", list.toString()).commit()
+
+        val vm = StoreViewModel(app)
+        rule.setContent { StoreRoot(vm) }
+        rule.runOnIdle { vm.search("waze") }
+        waitFor("search", vm) { vm.results !is Load.Loading }
+        settle()
+        rule.runOnIdle { vm.showProblem(others[1].pkg) }   // כמו לחיצה על סמל האזהרה
+        settle(); shot("install-states")
+
+        // דף האפליקציה של אפליקציה מותקנת: "פתיחה" (או "עדכון" אם ב-APKPure יש חדשה)
+        rule.runOnIdle { vm.open(waze.pkg) }
+        waitFor("app", vm) { vm.detailsCache[waze.pkg].let { it != null && it !is Load.Loading } }
+        waitFor("apk", vm) { vm.apkCache[waze.pkg].let { it != null && it !is Load.Loading } }
+        settle(); shot("install-app-page")
+    }
 
     private fun appPage(name: String, pkg: String = "com.waze", prepare: (StoreViewModel) -> Unit = {}) {
         val vm = StoreViewModel(ApplicationProvider.getApplicationContext<Application>())

@@ -23,7 +23,8 @@ sealed class DlState {
     data class Downloading(val progress: Float) : DlState() // -1 = גודל לא ידוע
     data class NotChecked(val pageUrl: String) : DlState()
     data class Blocked(val pageUrl: String) : DlState()
-    data class Failed(val message: String) : DlState()
+    /** retryable = false: אין טעם לנסות שוב (למשל האפליקציה לא קיימת ב-APKPure) */
+    data class Failed(val message: String, val retryable: Boolean = true) : DlState()
     data class Ready(val path: String, val xapk: Boolean, val version: String? = null) : DlState()
 }
 
@@ -40,6 +41,10 @@ class Downloads(context: Context) {
     private val _items = MutableStateFlow(load())
     val items: StateFlow<List<DownloadItem>> = _items
 
+    /** הורדה שהסתיימה בלי קובץ (נכשלה, או נטפרי) - כדי שהממשק יודיע גם כשלא נמצאים במסך ההורדות */
+    private val _problems = kotlinx.coroutines.flow.MutableSharedFlow<DownloadItem>(extraBufferCapacity = 8)
+    val problems: kotlinx.coroutines.flow.SharedFlow<DownloadItem> = _problems
+
     fun stateOf(pkg: String): DlState? = _items.value.firstOrNull { it.pkg == pkg }?.state
 
     fun start(pkg: String, title: String, icon: String?) {
@@ -51,11 +56,13 @@ class Downloads(context: Context) {
                 when (e) {
                     is NetFreeBlockException -> e.block.toState()
                     is kotlinx.coroutines.CancellationException -> throw e
+                    is NotOnApkPureException -> DlState.Failed(e.localized(app), retryable = false)
                     else -> DlState.Failed(e.localized(app))
                 }
             }
             update(pkg, state)
             persist()
+            if (state !is DlState.Ready) _items.value.firstOrNull { it.pkg == pkg }?.let { _problems.tryEmit(it) }
         }
         synchronized(jobs) { jobs[pkg] = job }
     }
@@ -164,7 +171,7 @@ class Downloads(context: Context) {
                 is DlState.Ready -> o.put("t", "ready").put("path", s.path).put("xapk", s.xapk).put("ver", s.version)
                 is DlState.NotChecked -> o.put("t", "notchecked").put("page", s.pageUrl)
                 is DlState.Blocked -> o.put("t", "blocked").put("page", s.pageUrl)
-                is DlState.Failed -> o.put("t", "failed").put("msg", s.message)
+                is DlState.Failed -> o.put("t", "failed").put("msg", s.message).put("retry", s.retryable)
                 else -> o.put("t", "failed").put("msg", app.getString(R.string.err_stopped))
             }
             arr.put(o)
@@ -184,7 +191,7 @@ class Downloads(context: Context) {
                 }
                 "notchecked" -> DlState.NotChecked(o.optString("page"))
                 "blocked" -> DlState.Blocked(o.optString("page"))
-                else -> DlState.Failed(o.optString("msg", app.getString(R.string.err_stopped)))
+                else -> DlState.Failed(o.optString("msg", app.getString(R.string.err_stopped)), o.optBoolean("retry", true))
             }
             DownloadItem(o.optString("pkg"), o.optString("title"), o.optString("icon").ifBlank { null }, state)
         }
