@@ -173,7 +173,7 @@ private fun SectionCard(section: HomeSection, vm: StoreViewModel) {
 }
 
 @Composable
-private fun AppTile(app: AppSummary, size: Dp, onClick: () -> Unit) {
+internal fun AppTile(app: AppSummary, size: Dp, onClick: () -> Unit) {
     Column(
         Modifier.width(size).clip(MaterialTheme.shapes.small).clickable(onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -259,151 +259,11 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
     }
 }
 
-// ================= דף אפליקציה =================
-
 @Composable
-fun AppScreen(vm: StoreViewModel, pkg: String) {
-    LaunchedEffect(pkg) { vm.loadDetails(pkg) }
-    val items by vm.downloads.items.collectAsState()
-    val w = LocalWindow.current
-    Column(Modifier.fillMaxSize()) {
-        IconButton(onClick = { vm.back() }, Modifier.padding(4.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "חזרה") }
-        when (val d = vm.detailsCache[pkg] ?: Load.Loading) {
-            is Load.Loading -> Loading()
-            is Load.Error -> ErrorMessage(d.message) { vm.loadDetails(pkg) }
-            is Load.Done -> {
-                val a = d.value
-                val button: @Composable (Modifier) -> Unit = { mod ->
-                    DownloadButton(
-                        items.stateFor(pkg), mod,
-                        onDownload = { vm.download(pkg, a.title, a.icon) },
-                        onInstall = vm::install,
-                        onShowDownloads = { vm.selectTab(Tab.Downloads) },
-                    )
-                }
-                if (w.twoPane) {
-                    // שני טורים: מידע וכפתור מימין, צילומי מסך ותיאור משמאל
-                    Row(Modifier.fillMaxSize()) {
-                        Column(
-                            Modifier.width(if (w.width == WidthClass.Expanded) 380.dp else 300.dp).fillMaxHeight()
-                                .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-                            verticalArrangement = Arrangement.spacedBy(18.dp),
-                        ) {
-                            AppHeader(a, vertical = true)
-                            StatsRow(a)
-                            button(Modifier.fillMaxWidth())
-                            InfoBox(a)
-                            Spacer(Modifier.height(Gutter))
-                        }
-                        LazyColumn(
-                            Modifier.weight(1f).fillMaxHeight(),
-                            contentPadding = PaddingValues(end = 20.dp, bottom = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(20.dp),
-                        ) {
-                            if (a.screenshots.isNotEmpty()) item { Screenshots(a.screenshots, w.shotHeight) }
-                            item { About(a) }
-                        }
-                    }
-                } else {
-                    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        item { Box(Modifier.padding(horizontal = 20.dp)) { AppHeader(a, vertical = false) } }
-                        item { Box(Modifier.padding(horizontal = 12.dp)) { StatsRow(a) } }
-                        item { button(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }
-                        if (a.screenshots.isNotEmpty()) item { Screenshots(a.screenshots, w.shotHeight, 20.dp) }
-                        item { Box(Modifier.padding(horizontal = 20.dp)) { About(a) } }
-                        item { Box(Modifier.padding(horizontal = 20.dp)) { InfoBox(a) } }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppHeader(a: AppDetails, vertical: Boolean) {
-    val texts: @Composable ColumnScope.() -> Unit = {
-        Text(a.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
-            textAlign = if (vertical) TextAlign.Center else TextAlign.Start)
-        a.developer?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium) }
-    }
-    if (vertical) Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AppIcon(a.icon, 96.dp); texts()
-    } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-        AppIcon(a.icon, 76.dp); Column(content = texts)
-    }
-}
-
-/** נתונים כאייקון + ערך, בלי כותרות */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun StatsRow(a: AppDetails) {
-    FlowRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        a.score?.takeIf { it > 0 }?.let { StatChip(Icons.Default.Star, "%.1f".format(it), MaterialTheme.colorScheme.tertiary) }
-        a.installs?.let { StatChip(DownloadIcon, it) }
-        a.genre?.let { StatChip(null, it) }
-        if (a.containsAds) StatChip(Icons.Default.Info, "מודעות")
-    }
-}
-
-@Composable
-private fun StatChip(icon: ImageVector?, text: String, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Row(
-        Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        icon?.let { Icon(it, null, Modifier.size(16.dp), tint = tint) }
-        Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-    }
-}
-
-@Composable
-private fun Stat(icon: ImageVector, text: String) {
+internal fun Stat(icon: ImageVector, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         Icon(icon, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/** תיאור: מקופל עם חץ לפתיחה, בלי "עוד" / "פחות" */
-@Composable
-private fun About(a: AppDetails) {
-    var expanded by rememberSaveable(a.pkg) { mutableStateOf(false) }
-    val text = (if (expanded) a.description ?: a.summary else a.summary ?: a.description) ?: return
-    Column(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(enabled = a.description != null) { expanded = !expanded }
-            .padding(vertical = 4.dp),
-    ) {
-        Text(
-            text, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
-        )
-        if (a.description != null) Icon(
-            if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null,
-            Modifier.align(Alignment.CenterHorizontally), tint = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun InfoBox(a: AppDetails) {
-    Column(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        a.version?.let { InfoLine("v", it) }
-        InfoLine("#", a.pkg)
-    }
-}
-
-@Composable
-private fun InfoLine(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

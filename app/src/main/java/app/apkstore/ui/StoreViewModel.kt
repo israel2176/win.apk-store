@@ -112,9 +112,14 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** פותח את דף החסימה של נטפרי, שבו אפשר לשלוח את הקובץ לבדיקה */
-    fun openCheckPage(url: String) {
+    fun openCheckPage(url: String) = openUrl(url)
+
+    /** פותח קישור (אתר, מדיניות פרטיות, mailto:) באפליקציה המתאימה */
+    fun openUrl(url: String) {
         val ctx = getApplication<Application>()
-        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        runCatching {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { Toast.makeText(ctx, "אין אפליקציה שיכולה לפתוח את הקישור", Toast.LENGTH_SHORT).show() }
     }
 
     private fun errorText(e: Exception) = when (e) {

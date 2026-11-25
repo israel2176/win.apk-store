@@ -110,4 +110,19 @@ class ScreensTest {
         waitFor("app", vm) { vm.detailsCache[apps[0].pkg].let { it != null && it !is Load.Loading } }
         settle(); shot("flow-app-ready")
     }
+
+    /** דף אפליקציה מלא, על מסך גבוה במיוחד כדי שכל האזורים ייכנסו לצילום אחד */
+    @Test @Config(sdk = [34], qualifiers = "w400dp-h3400dp-port-xxhdpi")
+    fun appPageFull() = appPage("full-app")
+
+    @Test @Config(sdk = [34], qualifiers = "w1280dp-h1900dp-land-xhdpi")
+    fun appPageTablet() = appPage("full-app-tablet")
+
+    private fun appPage(name: String, pkg: String = "com.waze") {
+        val vm = StoreViewModel(ApplicationProvider.getApplicationContext<Application>())
+        rule.setContent { StoreRoot(vm) }
+        rule.runOnIdle { vm.open(pkg) }
+        waitFor("app", vm) { vm.detailsCache[pkg].let { it != null && it !is Load.Loading } }
+        settle(); shot(name)
+    }
 }
