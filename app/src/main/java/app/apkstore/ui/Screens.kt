@@ -179,7 +179,7 @@ internal fun AppTile(app: AppSummary, size: Dp, onClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         AppIcon(app.icon, size)
-        Text(app.title, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(34.dp))
+        Text(bidi(app.title), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(34.dp))
         Rating(app.score)
     }
 }
@@ -213,6 +213,13 @@ fun SearchScreen(vm: StoreViewModel) {
                         onShowDownloads = { vm.selectTab(Tab.Downloads) },
                     )
                 }
+                // סוף הרשימה: טוען עוד תוצאות (כמו גלילה בפליי)
+                if (vm.canLoadMore) fullLine("more") {
+                    LaunchedEffect(r.value.size) { vm.loadMoreResults() }
+                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                    }
+                }
             }
         }
     }
@@ -234,7 +241,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
         ) {
             AppIcon(app.icon, 64.dp)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(app.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(bidi(app.title), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 app.developer?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Rating(app.score)
@@ -243,7 +250,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
             }
             // ברוחב - הכפתור בצד; בטלפון - מתחת
             if (!w.compact) DownloadButton(
-                state, Modifier.widthIn(min = 160.dp),
+                state, Modifier.widthIn(min = 160.dp), price = app.price,
                 onDownload = { vm.download(app.pkg, app.title, app.icon) },
                 onInstall = vm::install,
                 onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -251,7 +258,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
         }
         if (app.screenshots.isNotEmpty()) Screenshots(app.screenshots, w.shotHeight * 0.75f, Gutter)
         if (w.compact) DownloadButton(
-            state, Modifier.fillMaxWidth().padding(horizontal = Gutter),
+            state, Modifier.fillMaxWidth().padding(horizontal = Gutter), price = app.price,
             onDownload = { vm.download(app.pkg, app.title, app.icon) },
             onInstall = vm::install,
             onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -323,7 +330,7 @@ private fun CardHeader(item: DownloadItem, sub: String?, subColor: Color, onRemo
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         AppIcon(item.icon, 52.dp)
         Column(Modifier.weight(1f)) {
-            Text(item.title, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(bidi(item.title), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             sub?.let { Text(it, color = subColor, style = MaterialTheme.typography.bodySmall, maxLines = 2) }
         }
         trailing()

@@ -72,8 +72,29 @@ class Downloads(context: Context) {
         persist()
     }
 
+    /**
+     * כמו apkeep: אם ההעברה נקטעה, מנסים שוב עד פעמיים נוספות.
+     * חסימת נטפרי או דף אינטרנט במקום קובץ - לא מנסים שוב.
+     */
     private suspend fun download(pkg: String): DlState {
         val src = ApkPure.resolve(pkg)
+        var last: IOException? = null
+        repeat(3) { attempt ->
+            try {
+                return transfer(pkg, src)
+            } catch (e: NotAFileException) {
+                throw e
+            } catch (e: IOException) {
+                last = e
+                if (attempt < 2) kotlinx.coroutines.delay(2000L * (attempt + 1))
+            }
+        }
+        throw last ?: IOException("ההורדה נכשלה")
+    }
+
+    private class NotAFileException(msg: String) : IOException(msg)
+
+    private suspend fun transfer(pkg: String, src: ApkSource): DlState {
         val ext = if (src.isXapk) "xapk" else "apk"
         val part = File(dir, "$pkg.$ext.part")
         val target = File(dir, "$pkg.$ext")
@@ -86,8 +107,9 @@ class Downloads(context: Context) {
             if (looksHtml) {
                 val body = resp.peekBody(256L * 1024).string()
                 NetFree.detect(ct ?: "text/html", body)?.let { return it.toState() }
-                throw IOException("התקבל דף אינטרנט במקום קובץ")
+                throw NotAFileException("התקבל דף אינטרנט במקום קובץ")
             }
+            if (resp.code in 400..499) throw NotAFileException("ההורדה נכשלה (${resp.code})")
             if (!resp.isSuccessful) throw IOException("ההורדה נכשלה (${resp.code})")
 
             val body = resp.body ?: throw IOException("תשובה ריקה")

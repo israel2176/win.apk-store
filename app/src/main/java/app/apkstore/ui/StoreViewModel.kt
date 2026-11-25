@@ -17,6 +17,8 @@ import app.apkstore.data.DlState
 import app.apkstore.data.Downloads
 import app.apkstore.data.NetFreeBlockException
 import app.apkstore.data.PlayApi
+import app.apkstore.data.Review
+import app.apkstore.data.ReviewSort
 import app.apkstore.install.Installer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -26,6 +28,14 @@ import kotlinx.coroutines.launch
 enum class Tab { Home, Search, Downloads }
 
 data class HomeSection(val title: String, val query: String, val apps: List<AppSummary>)
+
+data class ReviewsState(
+    val sort: ReviewSort,
+    val items: List<Review>,
+    val next: String?,
+    val loading: Boolean,
+    val error: String? = null,
+)
 
 sealed class Load<out T> {
     data object Loading : Load<Nothing>()
@@ -46,12 +56,20 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     var results by mutableStateOf<Load<List<AppSummary>>?>(null)
         private set
     private var searchJob: Job? = null
+    /** token לעמוד הבא של תוצאות החיפוש; null = אין עוד */
+    private var searchNext: String? = null
+    var loadingMore by mutableStateOf(false)
+        private set
+    val canLoadMore get() = searchNext != null
+
+    /** ביקורות נוספות לכל אפליקציה (מעבר ל-20 שבדף) */
+    val reviewsState = mutableStateMapOf<String, ReviewsState>()
 
     val detailsCache = mutableStateMapOf<String, Load<AppDetails>>()
 
     /** שורות הדף הראשי - כל שורה היא חיפוש חי בפליי. אפשר לשנות כאן בחופשיות */
     private val homeRows = listOf(
-        "כלים" to "כלים שימושיים",
+        "כלים" to "כלי עזר",
         "תחבורה" to "תחבורה ציבורית",
         "פיננסים" to "בנק",
         "קניות" to "קניות",
@@ -64,7 +82,7 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             home = try {
                 val sections = homeRows.map { (title, q) ->
-                    async { HomeSection(title, q, runCatching { PlayApi.search(q) }.getOrDefault(emptyList()).take(12)) }
+                    async { HomeSection(title, q, runCatching { PlayApi.search(q).items }.getOrDefault(emptyList()).take(12)) }
                 }.awaitAll().filter { it.apps.isNotEmpty() }
                 if (sections.isEmpty()) Load.Error("לא ניתן לטעון מפליי כרגע") else Load.Done(sections)
             } catch (e: Exception) {
@@ -81,8 +99,48 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         detailStack.clear()
         searchJob?.cancel()
         results = Load.Loading
+        searchNext = null
+        loadingMore = false
         searchJob = viewModelScope.launch {
-            results = try { Load.Done(PlayApi.search(text)) } catch (e: Exception) { Load.Error(errorText(e)) }
+            results = try {
+                val page = PlayApi.search(text)
+                searchNext = page.next
+                Load.Done(page.items)
+            } catch (e: Exception) { Load.Error(errorText(e)) }
+        }
+    }
+
+    /** גלילה לסוף הרשימה - טוען עוד תוצאות */
+    fun loadMoreResults() {
+        val token = searchNext ?: return
+        val cur = (results as? Load.Done)?.value ?: return
+        if (loadingMore) return
+        loadingMore = true
+        searchJob = viewModelScope.launch {
+            try {
+                val page = PlayApi.searchMore(token)
+                searchNext = page.next
+                results = Load.Done((cur + page.items).distinctBy { it.pkg })
+            } catch (e: Exception) {
+                searchNext = null
+            } finally { loadingMore = false }
+        }
+    }
+
+    /** ביקורות: החלפת מיון או טעינת עמוד נוסף */
+    fun loadReviews(pkg: String, sort: ReviewSort, more: Boolean) {
+        val cur = reviewsState[pkg]
+        if (cur?.loading == true) return
+        val token = if (more && cur?.sort == sort) cur.next ?: return else null
+        val base = if (more && cur?.sort == sort) cur.items else emptyList()
+        reviewsState[pkg] = ReviewsState(sort, base, cur?.next, loading = true)
+        viewModelScope.launch {
+            reviewsState[pkg] = try {
+                val page = PlayApi.reviews(pkg, sort, token)
+                ReviewsState(sort, (base + page.items).distinctBy { it.id }, page.next, loading = false)
+            } catch (e: Exception) {
+                ReviewsState(sort, base, null, loading = false, error = errorText(e))
+            }
         }
     }
 

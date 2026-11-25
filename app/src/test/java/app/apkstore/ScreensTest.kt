@@ -86,7 +86,7 @@ class ScreensTest {
     @Test @Config(sdk = [34], qualifiers = "w400dp-h860dp-port-xxhdpi")
     fun downloadStates() {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val apps = runBlocking { PlayApi.search("waze") }.take(4)
+        val apps = runBlocking { PlayApi.search("waze") }.items.take(4)
         val dir = File(app.getExternalFilesDir(null) ?: app.filesDir, "apks").apply { mkdirs() }
         val apk = File(dir, "${apps[0].pkg}.apk").apply { writeText("x") }
         fun item(a: AppSummary) = JSONObject().put("pkg", a.pkg).put("title", a.title).put("icon", a.icon)
@@ -117,6 +117,10 @@ class ScreensTest {
 
     @Test @Config(sdk = [34], qualifiers = "w1280dp-h1900dp-land-xhdpi")
     fun appPageTablet() = appPage("full-app-tablet")
+
+    /** אפליקציה בתשלום: במקום "הורדה" מוצג המחיר, והכפתור לא פעיל */
+    @Test @Config(sdk = [34], qualifiers = "w400dp-h1400dp-port-xxhdpi")
+    fun appPagePaid() = appPage("full-app-paid", "com.mojang.minecraftpe")
 
     private fun appPage(name: String, pkg: String = "com.waze") {
         val vm = StoreViewModel(ApplicationProvider.getApplicationContext<Application>())

@@ -4,9 +4,15 @@
 
 ## מבנה
 
-- `data/PlayApi.kt`: חיפוש ודף אפליקציה ישירות מ-play.google.com (פענוח AF_initDataCallback).
+- `data/PlayApi.kt`: חיפוש, דף אפליקציה וביקורות ישירות מ-play.google.com. הקוד תואם ל-google-play-scraper (Node ו-Python):
+  - אותם נתיבים, כולל הנתיבים החלופיים שלהן.
+  - טיפול כללי בפורמט JSPB: כשמערך מתקצר, השדות הגבוהים עוברים לאובייקט שבסופו.
+  - איתור בלוקים לפי מזהה הבקשה, ולא לפי המספר ds:N.
+  - עמודים נוספים של חיפוש וביקורות דרך batchexecute.
+  - ניסיונות חוזרים כשפליי עמוס.
+  - אפליקציה בתשלום מזוהה, ולא מוצעת להורדה.
   כשגוגל משנה את המבנה, מעדכנים כאן את האינדקסים.
-- `data/ApkPure.kt`: אותה קריאה ש-apkeep עושה ל-api.pureapk.com, ומחזירה קישור ל-APK או ל-XAPK.
+- `data/ApkPure.kt`: אותה קריאה ש-apkeep עושה ל-api.pureapk.com, ומחזירה קישור ל-APK או ל-XAPK. כמו ב-apkeep, אם ההעברה נקטעת, ההורדה מנסה שוב עד פעמיים נוספות.
 - `data/NetFree.kt`: זיהוי דף החסימה. `risk-type` פירושו שהקובץ לא נבדק, `deny` פירושו שהוא נחסם.
 - `data/Downloads.kt`: ניהול ההורדות. "נסה שוב" תמיד מבקש קישור חדש.
 - `install/Installer.kt`: התקנת APK או XAPK (split APKs) בסשן של PackageInstaller.
@@ -22,6 +28,13 @@
     ./gradlew assembleDebug
 
 הקובץ שנוצר: `app/build/outputs/apk/debug/app-debug.apk`
+
+## בדיקות מול פליי
+
+    ./gradlew testDebugUnitTest
+
+`PlayApiTest` בודק מול פליי החי (דורש אינטרנט) את המקרים שמופיעים בבדיקות של google-play-scraper: משחק, אפליקציה בתשלום, "משתנה בהתאם למכשיר", פרטי מפתח, אפליקציה שלא קיימת, חיפוש בעברית, חיפוש בלי תוצאות, עמודים נוספים, וביקורות בכל סוגי המיון.
+דוח מפורט של מה שנקרא מכל אפליקציה נשמר ב-`app/build/outputs/play-report.txt`.
 
 ## צילומי מסך של הממשק
 

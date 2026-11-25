@@ -42,10 +42,13 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -72,6 +75,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.apkstore.data.AppDetails
 import app.apkstore.data.Review
+import app.apkstore.data.ReviewSort
 import app.apkstore.data.sizedImage
 import coil.compose.AsyncImage
 import java.text.DateFormat
@@ -79,6 +83,8 @@ import java.util.Date
 import java.util.Locale
 
 private val Pad = 20.dp
+/** טקסט ארוך (תיאור, ביקורת) - הכיוון לפי התוכן: אנגלית משמאל לימין, עברית מימין לשמאל */
+private val ContentDir = androidx.compose.ui.text.TextStyle(textDirection = androidx.compose.ui.text.style.TextDirection.Content)
 private val HE = Locale("iw")
 
 private fun count(n: Long) = "%,d".format(n)
@@ -102,7 +108,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                 val a = d.value
                 val button: @Composable (Modifier) -> Unit = { mod ->
                     DownloadButton(
-                        items.stateFor(pkg), mod,
+                        items.stateFor(pkg), mod, price = a.price, preregister = a.preregister,
                         onDownload = { vm.download(pkg, a.title, a.icon) },
                         onInstall = vm::install,
                         onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -128,6 +134,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                             contentPadding = PaddingValues(end = Pad, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
+                            a.video?.let { v -> item { VideoLink(v, vm) } }
                             if (a.screenshots.isNotEmpty()) item { Screenshots(a.screenshots, w.shotHeight) }
                             contentSections(a, vm, padded = false)
                         }
@@ -137,6 +144,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                         item { Box(Modifier.padding(horizontal = Pad)) { AppHeader(a, vertical = false) } }
                         item { Box(Modifier.padding(horizontal = 12.dp)) { StatsRow(a) } }
                         item { button(Modifier.fillMaxWidth().padding(horizontal = Pad)) }
+                        a.video?.let { v -> item { Box(Modifier.padding(horizontal = Pad)) { VideoLink(v, vm) } } }
                         if (a.screenshots.isNotEmpty()) item { Screenshots(a.screenshots, w.shotHeight, Pad) }
                         contentSections(a, vm, padded = true)
                         item { Box(Modifier.padding(horizontal = Pad)) { DetailsPanel(a) } }
@@ -153,10 +161,23 @@ private fun LazyListScope.contentSections(a: AppDetails, vm: StoreViewModel, pad
     val m = if (padded) Modifier.padding(horizontal = Pad) else Modifier
     item { Box(m) { About(a) } }
     a.whatsNew?.let { text -> item { Box(m) { WhatsNewPanel(text, a.updated) } } }
-    if (a.histogram.isNotEmpty() || a.reviews.isNotEmpty()) item { Box(m) { RatingsPanel(a) } }
+    if (a.histogram.isNotEmpty() || a.reviews.isNotEmpty()) item { Box(m) { RatingsPanel(a, vm) } }
     if (a.dataSafety.isNotEmpty()) item { Box(m) { DataSafetyPanel(a) } }
     if (a.permissions.isNotEmpty()) item { Box(m) { PermissionsPanel(a) } }
     if (a.similar.isNotEmpty()) item { SimilarPanel(a, vm, padded) }
+}
+
+/** סרטון האפליקציה (יוטיוב) - נפתח באפליקציה החיצונית */
+@Composable
+private fun VideoLink(url: String, vm: StoreViewModel) {
+    Row(
+        Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer).clickable { vm.openUrl(url) }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Default.PlayArrow, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+        Text("סרטון", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+    }
 }
 
 // ================= ראש הדף =================
@@ -164,7 +185,7 @@ private fun LazyListScope.contentSections(a: AppDetails, vm: StoreViewModel, pad
 @Composable
 private fun AppHeader(a: AppDetails, vertical: Boolean) {
     val texts: @Composable ColumnScope.() -> Unit = {
-        Text(a.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
+        Text(bidi(a.title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold,
             textAlign = if (vertical) TextAlign.Center else TextAlign.Start)
         a.developer?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium) }
     }
@@ -218,7 +239,7 @@ private fun About(a: AppDetails) {
         Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(enabled = a.description != null) { expanded = !expanded }
             .animateContentSize().padding(vertical = 4.dp),
     ) {
-        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
+        Text(text, style = ContentDir, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis)
         if (a.description != null) ExpandArrow(expanded, Modifier.align(Alignment.CenterHorizontally))
     }
 }
@@ -272,7 +293,7 @@ private fun WhatsNewPanel(text: String, updated: String?) {
     Panel(Icons.Default.Notifications, "מה חדש", trailing = updated) {
         var expanded by rememberSaveable { mutableStateOf(false) }
         Text(
-            text, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expanded) Int.MAX_VALUE else 3,
+            text, style = ContentDir, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable { expanded = !expanded },
         )
     }
@@ -293,7 +314,7 @@ private fun Stars(score: Double, size: Dp) {
 }
 
 @Composable
-private fun RatingsPanel(a: AppDetails) {
+private fun RatingsPanel(a: AppDetails, vm: StoreViewModel) {
     Panel(Icons.Default.Star, "דירוגים וביקורות") {
         if (a.histogram.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -324,20 +345,7 @@ private fun RatingsPanel(a: AppDetails) {
                 }
             }
         }
-        if (a.reviews.isNotEmpty()) {
-            var all by rememberSaveable(a.pkg) { mutableStateOf(false) }
-            val shown = if (all) a.reviews else a.reviews.take(3)
-            shown.forEach { ReviewCard(it) }
-            if (a.reviews.size > 3) Box(
-                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { all = !all }.padding(4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (!all) Text("+${a.reviews.size - 3}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                    ExpandArrow(all)
-                }
-            }
-        }
+        if (a.reviews.isNotEmpty()) ReviewsList(a, vm)
     }
 }
 
@@ -355,7 +363,7 @@ private fun ReviewCard(r: Review) {
                 modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
             )
             Column(Modifier.weight(1f)) {
-                Text(r.author, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(bidi(r.author), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Stars(r.score.toDouble(), 12.dp)
                     r.time?.let { Text(date(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -363,7 +371,7 @@ private fun ReviewCard(r: Review) {
             }
         }
         Text(
-            r.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            r.text, style = MaterialTheme.typography.bodyMedium.merge(ContentDir), color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
         )
         r.reply?.let { reply ->
@@ -376,6 +384,44 @@ private fun ReviewCard(r: Review) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             if (r.likes > 0) Stat(Icons.Default.ThumbUp, "${r.likes}")
             r.appVersion?.let { Text("v$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
+}
+
+/**
+ * ביקורות: בהתחלה 3 מתוך אלה שבדף. אחרי לחיצה - כל השאר, ואז טעינת עמודים נוספים מפליי
+ * (batchexecute oCPfdb, כמו reviews() בספריות), עם מיון: רלוונטיות / חדשות / דירוג.
+ */
+@Composable
+private fun ReviewsList(a: AppDetails, vm: StoreViewModel) {
+    val st = vm.reviewsState[a.pkg]
+    var open by rememberSaveable(a.pkg) { mutableStateOf(false) }
+    if (open) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(ReviewSort.Relevant to "רלוונטיות", ReviewSort.Newest to "חדשות", ReviewSort.Rating to "דירוג").forEach { (sort, label) ->
+            val selected = (st?.sort ?: ReviewSort.Relevant) == sort && (st != null || sort == ReviewSort.Relevant)
+            FilterChip(
+                selected = selected, onClick = { vm.loadReviews(a.pkg, sort, more = false) },
+                label = { Text(label) }, shape = CircleShape,
+            )
+        }
+    }
+    val list = st?.items?.takeIf { it.isNotEmpty() || st.loading.not() } ?: a.reviews
+    val shown = if (open) list else list.take(3)
+    shown.forEach { ReviewCard(it) }
+    st?.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    val more = !open && list.size > 3 || open && (st == null || st.next != null)
+    if (st?.loading == true) Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+    } else if (more) Box(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
+            if (!open) open = true
+            else vm.loadReviews(a.pkg, st?.sort ?: ReviewSort.Relevant, more = st != null)
+        }.padding(4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (!open) Text("+${list.size - 3}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            ExpandArrow(false)
         }
     }
 }
@@ -409,7 +455,15 @@ private fun DetailsPanel(a: AppDetails) {
     Panel(Icons.Default.Info, "פרטים") {
         a.updated?.let { IconLine(Icons.Default.DateRange, it) }
         a.version?.let { IconLine(Icons.AutoMirrored.Filled.List, ltr("v$it")) }
-        a.minAndroid?.let { IconLine(Icons.Default.Build, ltr("Android $it+")) }
+        a.minAndroid?.let { v ->
+            // כמו normalizeAndroidVersion: מספר -> "Android 8.0+", אחרת הטקסט כמו שהוא ("משתנה בהתאם למכשיר")
+            val n = v.substringBefore(' ')
+            IconLine(Icons.Default.Build, if (n.toDoubleOrNull() != null) ltr("Android $n+") else v)
+        }
+        a.released?.let { IconLine(Icons.Default.Star, it) }
+        a.iapRange?.let { IconLine(Icons.Default.ShoppingCart, it) }
+        if (a.categories.size > 1) IconLine(Icons.Default.Home, a.categories.joinToString(" · "))
+        a.developerLegalName?.takeIf { it != a.developer }?.let { IconLine(Icons.Default.Person, it) }
         (a.installsExact?.let(::count) ?: a.installs)?.let { IconLine(DownloadIcon, it) }
         a.contentRating?.let { IconLine(Icons.Default.Face, listOfNotNull(it, a.contentRatingNote).joinToString(" · ")) }
         IconLine(Icons.Default.Lock, a.pkg)

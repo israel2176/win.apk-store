@@ -91,6 +91,14 @@ val ShieldIcon: ImageVector by lazy {
     }
 }
 
+// ================= כיווניות =================
+
+/**
+ * בידוד כיוון לפי התו החזק הראשון (FSI): כותרת באנגלית בתוך ממשק בעברית
+ * נשארת מיושרת לימין, אבל הסימנים שלה ("!", ":") נשארים במקום הנכון.
+ */
+fun bidi(s: String) = "\u2068$s\u2069"
+
 // ================= אייקון אפליקציה ודירוג =================
 
 @Composable
@@ -129,7 +137,7 @@ fun AppRow(app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: ()
     ) {
         AppIcon(app.icon, 56.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(app.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(bidi(app.title), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             app.developer?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -138,7 +146,8 @@ fun AppRow(app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: ()
                 app.genre?.let { GenrePill(it) }
             }
         }
-        DownloadIconButton(state, onDownload, onInstall, onShowDownloads)
+        // אפליקציה בתשלום: מציגים את המחיר ולא מורידים
+        if (app.price != null) PricePill(app.price) else DownloadIconButton(state, onDownload, onInstall, onShowDownloads)
     }
 }
 
@@ -179,17 +188,39 @@ fun DownloadIconButton(state: DlState?, onDownload: () -> Unit, onInstall: (DlSt
     }
 }
 
-/** כפתור רחב - בדף האפליקציה ובתוצאה הראשונה */
+@Composable
+fun PricePill(price: String) {
+    Text(
+        price, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+        color = MaterialTheme.colorScheme.onTertiaryContainer,
+        modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
+}
+
+/**
+ * כפתור רחב - בדף האפליקציה ובתוצאה הראשונה.
+ * price != null: אפליקציה בתשלום - לא מורידים, רק מציגים את המחיר.
+ * preregister: עוד לא יצאה - הרשמה מוקדמת בלבד.
+ */
 @Composable
 fun DownloadButton(
     state: DlState?,
     modifier: Modifier = Modifier,
+    price: String? = null,
+    preregister: Boolean = false,
     onDownload: () -> Unit,
     onInstall: (DlState.Ready) -> Unit,
     onShowDownloads: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val mod = modifier.height(48.dp)
+    if (state == null && (price != null || preregister)) {
+        Button(onClick = {}, mod, enabled = false) {
+            Text(price ?: "טרם יצאה · הרשמה מוקדמת")
+        }
+        return
+    }
     when (state) {
         is DlState.Ready -> Button(onClick = { onInstall(state) }, mod) {
             Icon(InstallIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("התקנה")
