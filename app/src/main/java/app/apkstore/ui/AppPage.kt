@@ -439,7 +439,7 @@ private fun ReviewCard(r: Review) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AsyncImage(
-                model = sizedImage(r.avatar, 96), contentDescription = null, contentScale = ContentScale.Crop,
+                model = sizedImage(r.avatar, with(androidx.compose.ui.platform.LocalDensity.current) { 32.dp.roundToPx() }), contentDescription = null, contentScale = ContentScale.Crop,
                 modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
             )
             Column(Modifier.weight(1f)) {

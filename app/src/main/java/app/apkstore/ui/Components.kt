@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -106,7 +107,8 @@ fun bidi(s: String) = if (s.any { it in '\u0590'..'\u06FF' }) s else "\u2068$s\u
 
 @Composable
 fun AppIcon(url: String?, size: Dp) {
-    val px = (size.value * 2.5f).toInt().coerceIn(64, 256)
+    // בדיוק לפי צפיפות המסך - כדי שלא יהיה מטושטש במסכים צפופים (טאבלטים, מסכים גדולים)
+    val px = with(LocalDensity.current) { size.roundToPx() }.coerceIn(48, 1024)
     AsyncImage(
         model = sizedImage(url, px),
         contentDescription = null,
@@ -255,6 +257,7 @@ fun DownloadButton(
 
 @Composable
 fun Screenshots(urls: List<String>, height: Dp, startPad: Dp = 0.dp) {
+    val shotPx = with(LocalDensity.current) { height.roundToPx() }
     var open by remember { mutableStateOf<Int?>(null) }
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -262,7 +265,7 @@ fun Screenshots(urls: List<String>, height: Dp, startPad: Dp = 0.dp) {
     ) {
         itemsIndexed(urls) { i, u ->
             AsyncImage(
-                model = screenshotImage(u, (height.value * 2.5f).toInt()),
+                model = screenshotImage(u, shotPx),
                 contentDescription = null,
                 contentScale = ContentScale.FillHeight,
                 modifier = Modifier.height(height).clip(MaterialTheme.shapes.medium)
@@ -277,12 +280,14 @@ fun Screenshots(urls: List<String>, height: Dp, startPad: Dp = 0.dp) {
 /** צפייה במסך מלא עם החלקה */
 @Composable
 private fun ScreenshotViewer(urls: List<String>, start: Int, onClose: () -> Unit) {
+    // מסך מלא: לפי הצד הארוך של המסך בפיקסלים
+    val fullPx = with(LocalDensity.current) { maxOf(LocalWindow.current.heightDp, LocalWindow.current.widthDp).roundToPx() }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             val pager = rememberPagerState(initialPage = start) { urls.size }
             HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
                 AsyncImage(
-                    model = screenshotImage(urls[page], 1600),
+                    model = screenshotImage(urls[page], fullPx),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
