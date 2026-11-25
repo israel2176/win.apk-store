@@ -127,7 +127,9 @@ data class Page<T>(val items: List<T>, val next: String?)
  * כשגוגל משנה את המבנה - כאן מעדכנים.
  */
 object PlayApi {
-    private const val HL = "he"
+    /** שפת התוכן מפליי (תיאורים, ביקורות, קטגוריות) - לפי שפת המערכת */
+    private val HL: String get() = java.util.Locale.getDefault().language.let { if (it == "iw" || it == "he") "he" else it.ifBlank { "en" } }
+    /** המדינה נשארת ישראל: זמינות ומחירים לפי החנות הישראלית */
     private const val GL = "il"
     private const val BASE = "https://play.google.com"
 
@@ -186,7 +188,7 @@ object PlayApi {
         catch (e: NotFoundException) { get("$BASE/store/apps/details?id=$id&hl=$HL") }
         val page = parse(html)
         val a = (page.byRpc(RPC_DETAILS) ?: page.ds["ds:5"]).at(1, 2) as? JSONArray
-            ?: throw IOException("האפליקציה לא נמצאה בפליי")
+            ?: throw AppException(app.apkstore.R.string.err_app_not_in_play)
         // קודם התיאור המתורגם לעברית, ואם אין - המקורי (כמו בספריות)
         val descHtml = a.str(12, 0, 0, 1) ?: a.str(72, 0, 1)
         val priceMicros = a.num(57, 0, 0, 0, 0, 1, 0, 0)
@@ -328,9 +330,9 @@ object PlayApi {
         }
         val other = list(raw.at(2)) { it.str(1) }
         if (other.isNotEmpty()) {
-            val i = groups.indexOfFirst { it.name == "אחר" || it.name == "Other" }
+            val i = groups.indexOfFirst { it.name.equals("אחר") || it.name.equals("Other", ignoreCase = true) }
             if (i >= 0) groups[i] = groups[i].copy(items = groups[i].items + other)
-            else groups += PermissionGroup("אחר", other)
+            else groups += PermissionGroup("", other) // שם ריק = "אחר" בשפת הממשק
         }
         return groups
     }
@@ -393,7 +395,7 @@ object PlayApi {
         return Parsed(map, rpc)
     }
 
-    private class NotFoundException : IOException("לא נמצא")
+    private class NotFoundException : AppException(app.apkstore.R.string.err_not_found)
 
     private suspend fun get(url: String): String = call(Request.Builder().url(url).build())
 
@@ -422,7 +424,7 @@ object PlayApi {
      * מחכים ומנסים שוב, עד 3 פעמים. חסימת נטפרי ו-404 לא מנסים שוב.
      */
     private suspend fun call(req: Request): String {
-        val withLang = req.newBuilder().header("Accept-Language", "he-IL,he;q=0.9").build()
+        val withLang = req.newBuilder().header("Accept-Language", "$HL,en;q=0.8").build()
         var last: IOException? = null
         for (attempt in 1..3) {
             try {
@@ -431,9 +433,9 @@ object PlayApi {
                     NetFree.detect(resp.header("Content-Type"), body)?.let { throw NetFreeBlockException(it) }
                     if (resp.code == 404) throw NotFoundException()
                     if (resp.code == 429 || resp.code >= 500 || body.contains("PlayGatewayError")) {
-                        throw RetryableException("פליי עמוס כרגע (${resp.code})")
+                        throw RetryableException(resp.code)
                     }
-                    if (!resp.isSuccessful) throw IOException("שגיאה בגישה לפליי (${resp.code})")
+                    if (!resp.isSuccessful) throw AppException(app.apkstore.R.string.err_play_http, resp.code)
                     return body
                 }
             } catch (e: RetryableException) {
@@ -443,10 +445,10 @@ object PlayApi {
             }
             delay(1500L * attempt)
         }
-        throw last ?: IOException("שגיאה בגישה לפליי")
+        throw last ?: AppException(app.apkstore.R.string.err_play)
     }
 
-    private class RetryableException(msg: String) : IOException(msg)
+    private class RetryableException(code: Int) : AppException(app.apkstore.R.string.err_play_busy, code)
 }
 
 /** כתובת תמונה מ-play-lh בגודל מבוקש (חוסך הורדת תמונות ענק) */

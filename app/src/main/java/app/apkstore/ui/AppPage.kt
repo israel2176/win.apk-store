@@ -1,5 +1,7 @@
 package app.apkstore.ui
 
+import app.apkstore.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -89,7 +91,7 @@ import java.util.Locale
 private val Pad = 20.dp
 /** טקסט ארוך (תיאור, ביקורת) - הכיוון לפי התוכן: אנגלית משמאל לימין, עברית מימין לשמאל */
 private val ContentDir = androidx.compose.ui.text.TextStyle(textDirection = androidx.compose.ui.text.style.TextDirection.Content)
-private val HE = Locale("iw")
+private val HE get() = Locale.getDefault() // שפת המערכת
 
 private fun count(n: Long) = "%,d".format(n)
 /** בידוד כיוון משמאל לימין - כדי ש-"Android 10+" לא יוצג הפוך */
@@ -107,7 +109,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
     val items by vm.downloads.items.collectAsState()
     val w = LocalWindow.current
     Column(Modifier.fillMaxSize()) {
-        IconButton(onClick = { vm.back() }, Modifier.padding(4.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "חזרה") }
+        IconButton(onClick = { vm.back() }, Modifier.padding(4.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
         when (val d = vm.detailsCache[pkg] ?: Load.Loading) {
             is Load.Loading -> Loading()
             is Load.Error -> ErrorMessage(d.message) { vm.loadDetails(pkg) }
@@ -198,16 +200,16 @@ private fun SourceInfo(a: AppDetails, vm: StoreViewModel) {
     when (val s = vm.apkCache[a.pkg]) {
         null, is Load.Loading -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-            Text("בודק זמינות ב-APKPure…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.apk_checking), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         is Load.Error -> Note(Icons.Default.Warning, cs.surfaceContainerHigh, cs.onSurfaceVariant,
-            "לא ניתן לבדוק כרגע אם האפליקציה זמינה ב-APKPure", s.message)
+            stringResource(R.string.apk_check_failed), s.message)
         is Load.Done -> {
             val src = s.value
             if (src == null) {
                 Note(Icons.Default.Warning, cs.errorContainer, cs.onErrorContainer,
-                    "האפליקציה לא זמינה ב-APKPure",
-                    "אין ממנה קובץ להורדה, ולכן אי אפשר להוריד אותה דרך החנות.")
+                    stringResource(R.string.apk_missing_title),
+                    stringResource(R.string.apk_missing_body))
                 return
             }
             val facts = listOfNotNull(
@@ -219,12 +221,12 @@ private fun SourceInfo(a: AppDetails, vm: StoreViewModel) {
             when (Versions.freshness(src, a.version, a.updatedAt)) {
                 Freshness.Older -> Note(
                     Icons.Default.Warning, cs.tertiaryContainer, cs.onTertiaryContainer,
-                    "ב-APKPure יש גרסה ישנה יותר מבפליי",
+                    stringResource(R.string.apk_older_title),
                     if (a.version != null && src.versionName != null)
-                        "ב-APKPure: ${ltr("v" + src.versionName)} · בפליי: ${ltr("v" + a.version)}\nאפשר להוריד בכל זאת את הגרסה הקיימת."
-                    else "הגרסה ב-APKPure עלתה ב-${src.updatedAt?.let(::date)}, ובפליי האפליקציה עודכנה ב-${a.updated}.\nאפשר להוריד בכל זאת את הגרסה הקיימת.",
+                        stringResource(R.string.apk_older_versions, ltr("v" + src.versionName), ltr("v" + a.version))
+                    else stringResource(R.string.apk_older_dates, src.updatedAt?.let(::date) ?: "?", a.updated ?: "?"),
                 )
-                Freshness.Newer -> IconLine(Icons.Default.Check, "$facts · חדשה מהגרסה שבפליי")
+                Freshness.Newer -> IconLine(Icons.Default.Check, stringResource(R.string.apk_newer, facts))
                 else -> IconLine(Icons.Default.Check, facts)
             }
         }
@@ -254,7 +256,7 @@ private fun VideoLink(url: String, vm: StoreViewModel) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(Icons.Default.PlayArrow, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
-        Text("סרטון", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+        Text(stringResource(R.string.video), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
     }
 }
 
@@ -290,8 +292,8 @@ private fun StatsRow(a: AppDetails) {
         a.installs?.let { StatChip(DownloadIcon, it) }
         a.contentRating?.let { StatChip(Icons.Default.Face, it) }
         a.genre?.let { StatChip(null, it) }
-        if (a.containsAds) StatChip(Icons.Default.Info, "מודעות")
-        if (a.inAppPurchases) StatChip(Icons.Default.ShoppingCart, "רכישות")
+        if (a.containsAds) StatChip(Icons.Default.Info, stringResource(R.string.ads))
+        if (a.inAppPurchases) StatChip(Icons.Default.ShoppingCart, stringResource(R.string.purchases))
     }
 }
 
@@ -368,7 +370,7 @@ private fun Panel(
 
 @Composable
 private fun WhatsNewPanel(text: String, updated: String?) {
-    Panel(Icons.Default.Notifications, "מה חדש", trailing = updated) {
+    Panel(Icons.Default.Notifications, stringResource(R.string.whats_new), trailing = updated) {
         var expanded by rememberSaveable { mutableStateOf(false) }
         Text(
             text, style = ContentDir, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expanded) Int.MAX_VALUE else 3,
@@ -393,7 +395,7 @@ private fun Stars(score: Double, size: Dp) {
 
 @Composable
 private fun RatingsPanel(a: AppDetails, vm: StoreViewModel) {
-    Panel(Icons.Default.Star, "דירוגים וביקורות") {
+    Panel(Icons.Default.Star, stringResource(R.string.ratings_reviews)) {
         if (a.histogram.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -475,7 +477,7 @@ private fun ReviewsList(a: AppDetails, vm: StoreViewModel) {
     val st = vm.reviewsState[a.pkg]
     var open by rememberSaveable(a.pkg) { mutableStateOf(false) }
     if (open) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(ReviewSort.Relevant to "רלוונטיות", ReviewSort.Newest to "חדשות", ReviewSort.Rating to "דירוג").forEach { (sort, label) ->
+        listOf(ReviewSort.Relevant to stringResource(R.string.sort_relevant), ReviewSort.Newest to stringResource(R.string.sort_newest), ReviewSort.Rating to stringResource(R.string.sort_rating)).forEach { (sort, label) ->
             val selected = (st?.sort ?: ReviewSort.Relevant) == sort && (st != null || sort == ReviewSort.Relevant)
             FilterChip(
                 selected = selected, onClick = { vm.loadReviews(a.pkg, sort, more = false) },
@@ -508,7 +510,7 @@ private fun ReviewsList(a: AppDetails, vm: StoreViewModel) {
 
 @Composable
 private fun DataSafetyPanel(a: AppDetails) {
-    Panel(ShieldIcon, "בטיחות נתונים", collapsible = true) {
+    Panel(ShieldIcon, stringResource(R.string.data_safety), collapsible = true) {
         a.dataSafety.forEach { IconLine(ShieldIcon, it) }
         a.privacyPolicy?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
@@ -516,10 +518,10 @@ private fun DataSafetyPanel(a: AppDetails) {
 
 @Composable
 private fun PermissionsPanel(a: AppDetails) {
-    Panel(Icons.Default.Settings, "הרשאות", trailing = "${a.permissions.sumOf { it.items.size }}", collapsible = true) {
+    Panel(Icons.Default.Settings, stringResource(R.string.permissions), trailing = "${a.permissions.sumOf { it.items.size }}", collapsible = true) {
         a.permissions.forEach { g ->
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(g.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Text(g.name.ifBlank { stringResource(R.string.permissions_other) }, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 g.items.forEach { Text("•  $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
@@ -530,7 +532,7 @@ private fun PermissionsPanel(a: AppDetails) {
 
 @Composable
 private fun DetailsPanel(a: AppDetails) {
-    Panel(Icons.Default.Info, "פרטים") {
+    Panel(Icons.Default.Info, stringResource(R.string.details)) {
         a.updated?.let { IconLine(Icons.Default.DateRange, it) }
         a.version?.let { IconLine(Icons.AutoMirrored.Filled.List, ltr("v$it")) }
         a.minAndroid?.let { v ->
@@ -553,10 +555,10 @@ private fun DeveloperPanel(a: AppDetails, vm: StoreViewModel) {
     val links = listOfNotNull(
         a.developerWebsite?.let { Triple(Icons.Default.Home, it.removePrefix("https://").removePrefix("http://").trimEnd('/'), it) },
         a.developerEmail?.let { Triple(Icons.Default.Email, it, "mailto:$it") },
-        a.privacyPolicy?.let { Triple(ShieldIcon, "מדיניות פרטיות", it) },
+        a.privacyPolicy?.let { Triple(ShieldIcon, stringResource(R.string.privacy_policy), it) },
     )
     if (links.isEmpty() && a.developerAddress == null) return
-    Panel(Icons.Default.Person, a.developer ?: "מפתח") {
+    Panel(Icons.Default.Person, a.developer ?: stringResource(R.string.developer)) {
         links.forEach { (icon, text, url) -> IconLine(icon, text, link = true) { vm.openUrl(url) } }
         a.developerAddress?.let { IconLine(Icons.Default.Place, it) }
     }
@@ -586,7 +588,7 @@ private fun SimilarPanel(a: AppDetails, vm: StoreViewModel, padded: Boolean) {
         Row(
             Modifier.padding(horizontal = if (padded) Pad else 0.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) { SectionTitle("אפליקציות דומות") }
+        ) { SectionTitle(stringResource(R.string.similar_apps)) }
         LazyRow(
             contentPadding = PaddingValues(horizontal = if (padded) Pad else 0.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),

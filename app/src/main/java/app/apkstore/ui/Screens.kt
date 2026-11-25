@@ -1,5 +1,7 @@
 package app.apkstore.ui
 
+import app.apkstore.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -93,10 +95,10 @@ fun SearchBar(vm: StoreViewModel, autoFocus: Boolean = false, hPad: Dp = Gutter)
     TextField(
         value = vm.query,
         onValueChange = { vm.query = it },
-        placeholder = { Text("חיפוש") },
+        placeholder = { Text(stringResource(R.string.search_hint)) },
         leadingIcon = { Icon(Icons.Default.Search, null) },
         trailingIcon = {
-            if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Close, "ניקוי") }
+            if (vm.query.isNotEmpty()) IconButton(onClick = { vm.query = "" }) { Icon(Icons.Default.Close, stringResource(R.string.clear)) }
         },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -196,7 +198,7 @@ fun SearchScreen(vm: StoreViewModel) {
             null -> CenterMessage(Icons.Default.Search)
             is Load.Loading -> Loading()
             is Load.Error -> ErrorMessage(r.message) { vm.search() }
-            is Load.Done -> if (r.value.isEmpty()) CenterMessage(Icons.Default.Search, "אין תוצאות") else LazyVerticalGrid(
+            is Load.Done -> if (r.value.isEmpty()) CenterMessage(Icons.Default.Search, stringResource(R.string.no_results)) else LazyVerticalGrid(
                 columns = GridCells.Adaptive(if (w.compact) 10_000.dp else 360.dp),
                 contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = Gutter),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -334,7 +336,7 @@ private fun CardHeader(item: DownloadItem, sub: String?, subColor: Color, onRemo
             sub?.let { Text(it, color = subColor, style = MaterialTheme.typography.bodySmall, maxLines = 2) }
         }
         trailing()
-        IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "הסרה", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        IconButton(onClick = onRemove) { Icon(Icons.Default.Close, stringResource(R.string.remove), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -343,8 +345,8 @@ private fun AttentionCard(item: DownloadItem, vm: StoreViewModel) {
     val cs = MaterialTheme.colorScheme
     val s = item.state
     val (bg, fg, status) = when (s) {
-        is DlState.NotChecked -> Triple(cs.tertiaryContainer, cs.onTertiaryContainer, "לא נבדק ע״י נטפרי")
-        is DlState.Blocked -> Triple(cs.errorContainer, cs.onErrorContainer, "נחסם ע״י נטפרי")
+        is DlState.NotChecked -> Triple(cs.tertiaryContainer, cs.onTertiaryContainer, stringResource(R.string.nf_not_checked))
+        is DlState.Blocked -> Triple(cs.errorContainer, cs.onErrorContainer, stringResource(R.string.nf_blocked))
         is DlState.Failed -> Triple(cs.surfaceContainerLow, cs.onSurfaceVariant, s.message)
         else -> return
     }
@@ -353,10 +355,10 @@ private fun AttentionCard(item: DownloadItem, vm: StoreViewModel) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (s is DlState.NotChecked) {
                 Button(onClick = { vm.openCheckPage(s.pageUrl) }, colors = ButtonDefaults.buttonColors(containerColor = fg, contentColor = bg)) {
-                    Icon(ShieldIcon, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("שליחה לבדיקה")
+                    Icon(ShieldIcon, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.nf_send))
                 }
             }
-            OutlinedButton(onClick = { vm.retry(item.pkg) }) { Icon(Icons.Default.Refresh, "נסה שוב", tint = fg) }
+            OutlinedButton(onClick = { vm.retry(item.pkg) }) { Icon(Icons.Default.Refresh, stringResource(R.string.retry), tint = fg) }
         }
     }
 }
@@ -376,7 +378,7 @@ private fun ReadyCard(item: DownloadItem, vm: StoreViewModel) {
     val s = item.state as DlState.Ready
     CardShell(MaterialTheme.colorScheme.surfaceContainerLow) {
         CardHeader(item, listOfNotNull(s.version?.let { "\u2066v$it\u2069" }, if (s.xapk) "XAPK" else "APK").joinToString(" · "), MaterialTheme.colorScheme.onSurfaceVariant, onRemove = { vm.remove(item.pkg) }) {
-            Button(onClick = { vm.install(s) }) { Icon(InstallIcon, "התקנה") }
+            Button(onClick = { vm.install(s) }) { Icon(InstallIcon, stringResource(R.string.install)) }
         }
     }
 }

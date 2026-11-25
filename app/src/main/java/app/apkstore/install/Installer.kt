@@ -26,7 +26,7 @@ object Installer {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "יש לאשר התקנת אפליקציות ואז ללחוץ שוב על התקנה", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(app.apkstore.R.string.install_allow), Toast.LENGTH_LONG).show()
             }
             return
         }
@@ -41,7 +41,7 @@ object Installer {
                         val apks = zip.entries().asSequence()
                             .filter { !it.isDirectory && it.name.endsWith(".apk", true) }
                             .toList()
-                        require(apks.isNotEmpty()) { "לא נמצאו קבצי APK בתוך ה-XAPK" }
+                        if (apks.isEmpty()) throw app.apkstore.data.AppException(app.apkstore.R.string.err_xapk_empty)
                         for (e in apks) {
                             zip.getInputStream(e).use { write(session, e.name.substringAfterLast('/'), e.size, it) }
                         }
@@ -78,9 +78,9 @@ class InstallReceiver : BroadcastReceiver() {
                 confirm?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
             PackageInstaller.STATUS_SUCCESS ->
-                Toast.makeText(context, "האפליקציה הותקנה", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(app.apkstore.R.string.installed), Toast.LENGTH_SHORT).show()
             else -> {
-                val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "ההתקנה נכשלה"
+                val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: context.getString(app.apkstore.R.string.err_install)
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }
         }

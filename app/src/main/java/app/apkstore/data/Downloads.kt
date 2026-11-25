@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.Request
+import app.apkstore.R
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -50,7 +51,7 @@ class Downloads(context: Context) {
                 when (e) {
                     is NetFreeBlockException -> e.block.toState()
                     is kotlinx.coroutines.CancellationException -> throw e
-                    else -> DlState.Failed(e.message ?: "שגיאה לא ידועה")
+                    else -> DlState.Failed(e.localized(app))
                 }
             }
             update(pkg, state)
@@ -89,10 +90,10 @@ class Downloads(context: Context) {
                 if (attempt < 2) kotlinx.coroutines.delay(2000L * (attempt + 1))
             }
         }
-        throw last ?: IOException("ההורדה נכשלה")
+        throw last ?: AppException(R.string.err_download)
     }
 
-    private class NotAFileException(msg: String) : IOException(msg)
+    private class NotAFileException(res: Int, vararg args: Any) : AppException(res, *args)
 
     private suspend fun transfer(pkg: String, src: ApkSource): DlState {
         val ext = if (src.isXapk) "xapk" else "apk"
@@ -107,12 +108,12 @@ class Downloads(context: Context) {
             if (looksHtml) {
                 val body = resp.peekBody(256L * 1024).string()
                 NetFree.detect(ct ?: "text/html", body)?.let { return it.toState() }
-                throw NotAFileException("התקבל דף אינטרנט במקום קובץ")
+                throw NotAFileException(R.string.err_got_webpage)
             }
-            if (resp.code in 400..499) throw NotAFileException("ההורדה נכשלה (${resp.code})")
-            if (!resp.isSuccessful) throw IOException("ההורדה נכשלה (${resp.code})")
+            if (resp.code in 400..499) throw NotAFileException(R.string.err_download_code, resp.code)
+            if (!resp.isSuccessful) throw AppException(R.string.err_download_code, resp.code)
 
-            val body = resp.body ?: throw IOException("תשובה ריקה")
+            val body = resp.body ?: throw AppException(R.string.err_empty)
             val total = body.contentLength()
             var done = 0L
             var lastShown = -1
@@ -135,7 +136,7 @@ class Downloads(context: Context) {
             }
         }
         target.delete()
-        if (!part.renameTo(target)) throw IOException("שמירת הקובץ נכשלה")
+        if (!part.renameTo(target)) throw AppException(R.string.err_save)
         return DlState.Ready(target.absolutePath, src.isXapk, src.versionName)
     }
 
@@ -164,7 +165,7 @@ class Downloads(context: Context) {
                 is DlState.NotChecked -> o.put("t", "notchecked").put("page", s.pageUrl)
                 is DlState.Blocked -> o.put("t", "blocked").put("page", s.pageUrl)
                 is DlState.Failed -> o.put("t", "failed").put("msg", s.message)
-                else -> o.put("t", "failed").put("msg", "ההורדה הופסקה")
+                else -> o.put("t", "failed").put("msg", app.getString(R.string.err_stopped))
             }
             arr.put(o)
         }
@@ -179,11 +180,11 @@ class Downloads(context: Context) {
                 "ready" -> {
                     val path = o.optString("path")
                     if (File(path).exists()) DlState.Ready(path, o.optBoolean("xapk"), o.optString("ver").ifBlank { null })
-                    else DlState.Failed("הקובץ נמחק")
+                    else DlState.Failed(app.getString(R.string.err_file_deleted))
                 }
                 "notchecked" -> DlState.NotChecked(o.optString("page"))
                 "blocked" -> DlState.Blocked(o.optString("page"))
-                else -> DlState.Failed(o.optString("msg", "ההורדה הופסקה"))
+                else -> DlState.Failed(o.optString("msg", app.getString(R.string.err_stopped)))
             }
             DownloadItem(o.optString("pkg"), o.optString("title"), o.optString("icon").ifBlank { null }, state)
         }

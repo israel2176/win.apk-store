@@ -20,7 +20,7 @@ data class ApkSource(
 )
 
 /** האפליקציה לא קיימת ב-APKPure בכלל */
-class NotOnApkPureException(val pkg: String) : IOException("האפליקציה לא זמינה ב-APKPure, ולכן אי אפשר להוריד אותה מכאן")
+class NotOnApkPureException(val pkg: String) : AppException(app.apkstore.R.string.err_apkpure_missing)
 
 /**
  * מוצא קישור הורדה ב-APKPure לפי שם חבילה - אותה קריאה ש-apkeep עושה
@@ -52,7 +52,7 @@ object ApkPure {
             if (ct?.contains("html", true) == true) {
                 NetFree.detect(ct, String(bytes, Charsets.UTF_8))?.let { throw NetFreeBlockException(it) }
             }
-            if (!resp.isSuccessful) throw IOException("APKPure החזיר שגיאה (${resp.code})")
+            if (!resp.isSuccessful) throw AppException(app.apkstore.R.string.err_apkpure_http, resp.code)
             // מפענחים כ-Latin-1 כדי לא לשבור בתים
             parse(String(bytes, Charsets.ISO_8859_1)) ?: throw NotOnApkPureException(pkg)
         }

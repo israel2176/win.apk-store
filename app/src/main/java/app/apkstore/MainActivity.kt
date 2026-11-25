@@ -1,5 +1,6 @@
 package app.apkstore
 
+import androidx.compose.ui.res.stringResource
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -62,25 +63,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** שורש הממשק: ערכת צבעים, כיוון מימין לשמאל, ומידות החלון */
+/** שורש הממשק: ערכת צבעים ומידות החלון. השפה והכיוון - לפי המערכת */
 @Composable
 fun StoreRoot(vm: StoreViewModel = viewModel()) {
     StoreTheme {
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val info = WindowInfo(widthClassOf(maxWidth), maxWidth, maxHeight)
-                CompositionLocalProvider(LocalWindow provides info) { StoreApp(vm) }
-            }
+        // כיוון הממשק לפי שפת המערכת: עברית מימין לשמאל, אנגלית משמאל לימין
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val info = WindowInfo(widthClassOf(maxWidth), maxWidth, maxHeight)
+            CompositionLocalProvider(LocalWindow provides info) { StoreApp(vm) }
         }
     }
 }
 
-private data class NavDest(val tab: Tab, val icon: ImageVector, val label: String)
+private data class NavDest(val tab: Tab, val icon: ImageVector, @androidx.annotation.StringRes val label: Int)
 
 private val destinations = listOf(
-    NavDest(Tab.Home, Icons.Default.Home, "ראשי"),
-    NavDest(Tab.Search, Icons.Default.Search, "חיפוש"),
-    NavDest(Tab.Downloads, DownloadIcon, "הורדות"),
+    NavDest(Tab.Home, Icons.Default.Home, R.string.nav_home),
+    NavDest(Tab.Search, Icons.Default.Search, R.string.nav_search),
+    NavDest(Tab.Downloads, DownloadIcon, R.string.nav_downloads),
 )
 
 @Composable
@@ -99,8 +99,8 @@ fun StoreApp(vm: StoreViewModel = viewModel()) {
     @Composable
     fun NavIcon(d: NavDest) {
         if (d.tab == Tab.Downloads && (badge > 0 || active)) {
-            BadgedBox(badge = { if (active) Badge() else Badge { Text("$badge") } }) { Icon(d.icon, d.label) }
-        } else Icon(d.icon, d.label)
+            BadgedBox(badge = { if (active) Badge() else Badge { Text("$badge") } }) { Icon(d.icon, stringResource(d.label)) }
+        } else Icon(d.icon, stringResource(d.label))
     }
 
     val content: @Composable (Modifier) -> Unit = { mod ->
@@ -131,7 +131,7 @@ fun StoreApp(vm: StoreViewModel = viewModel()) {
                             selected = vm.tab == d.tab && detail == null,
                             onClick = { vm.selectTab(d.tab) },
                             icon = { NavIcon(d) },
-                            label = { Text(d.label) },
+                            label = { Text(stringResource(d.label)) },
                             alwaysShowLabel = false,
                         )
                     }

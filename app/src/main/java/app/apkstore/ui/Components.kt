@@ -1,5 +1,7 @@
 package app.apkstore.ui
 
+import app.apkstore.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -172,7 +174,7 @@ fun DownloadIconButton(state: DlState?, onDownload: () -> Unit, onInstall: (DlSt
         is DlState.Ready -> FilledTonalIconButton(
             onClick = { onInstall(state) },
             colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.primary, contentColor = cs.onPrimary),
-        ) { Icon(InstallIcon, "התקנה") }
+        ) { Icon(InstallIcon, stringResource(R.string.install)) }
         is DlState.Preparing, is DlState.Downloading -> Box(Modifier.size(48.dp).clickable(onClick = onShowDownloads), contentAlignment = Alignment.Center) {
             val p = (state as? DlState.Downloading)?.progress ?: -1f
             if (p >= 0) CircularProgressIndicator(progress = { p }, Modifier.size(34.dp), strokeWidth = 3.dp, trackColor = cs.surfaceContainerHighest)
@@ -184,8 +186,8 @@ fun DownloadIconButton(state: DlState?, onDownload: () -> Unit, onInstall: (DlSt
                 containerColor = if (state is DlState.NotChecked) cs.tertiaryContainer else cs.errorContainer,
                 contentColor = if (state is DlState.NotChecked) cs.onTertiaryContainer else cs.onErrorContainer,
             ),
-        ) { Icon(ShieldIcon, "נטפרי") }
-        else -> FilledTonalIconButton(onClick = onDownload) { Icon(DownloadIcon, "הורדה") }
+        ) { Icon(ShieldIcon, stringResource(R.string.netfree)) }
+        else -> FilledTonalIconButton(onClick = onDownload) { Icon(DownloadIcon, stringResource(R.string.download)) }
     }
 }
 
@@ -219,13 +221,13 @@ fun DownloadButton(
     val mod = modifier.height(48.dp)
     if (state == null && (price != null || preregister || unavailable)) {
         Button(onClick = {}, mod, enabled = false) {
-            Text(price ?: if (preregister) "טרם יצאה · הרשמה מוקדמת" else "לא זמין להורדה")
+            Text(price ?: stringResource(if (preregister) R.string.preregister else R.string.unavailable))
         }
         return
     }
     when (state) {
         is DlState.Ready -> Button(onClick = { onInstall(state) }, mod) {
-            Icon(InstallIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("התקנה")
+            Icon(InstallIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.install))
         }
         is DlState.Preparing, is DlState.Downloading -> OutlinedButton(onClick = onShowDownloads, mod) {
             val p = (state as? DlState.Downloading)?.progress ?: -1f
@@ -241,10 +243,10 @@ fun DownloadButton(
             ),
         ) {
             Icon(ShieldIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
-            Text(if (state is DlState.NotChecked) "ממתין לבדיקה" else "חסום")
+            Text(stringResource(if (state is DlState.NotChecked) R.string.dl_pending_check else R.string.dl_blocked))
         }
         else -> Button(onClick = onDownload, mod) {
-            Icon(DownloadIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("הורדה")
+            Icon(DownloadIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.download))
         }
     }
 }
@@ -287,7 +289,7 @@ private fun ScreenshotViewer(urls: List<String>, start: Int, onClose: () -> Unit
                 )
             }
             IconButton(onClick = onClose, Modifier.align(Alignment.TopStart).padding(12.dp)) {
-                Icon(Icons.Default.Close, "סגירה", tint = Color.White)
+                Icon(Icons.Default.Close, stringResource(R.string.close), tint = Color.White)
             }
             Row(Modifier.align(Alignment.BottomCenter).padding(20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 repeat(urls.size) { i ->
@@ -313,7 +315,7 @@ fun CenterMessage(icon: ImageVector, text: String? = null, onRetry: (() -> Unit)
                 contentAlignment = Alignment.Center,
             ) { Icon(icon, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             text?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
-            onRetry?.let { FilledTonalIconButton(onClick = it) { Icon(Icons.Default.Refresh, "נסה שוב") } }
+            onRetry?.let { FilledTonalIconButton(onClick = it) { Icon(Icons.Default.Refresh, stringResource(R.string.retry)) } }
         }
     }
 }

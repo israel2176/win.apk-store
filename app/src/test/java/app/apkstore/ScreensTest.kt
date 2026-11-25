@@ -70,20 +70,20 @@ class ScreensTest {
 
     private fun shot(name: String) = rule.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
 
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h860dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h860dp-port-xxhdpi")
     fun phone() = tour("phone")
 
-    @Test @Config(sdk = [34], qualifiers = "w860dp-h400dp-land-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w860dp-h400dp-land-xxhdpi")
     fun phoneLandscape() = tour("phone-land")
 
-    @Test @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-xhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w1280dp-h800dp-land-xhdpi")
     fun tablet() = tour("tablet")
 
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h860dp-port-night-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h860dp-port-night-xxhdpi")
     fun phoneDark() = tour("phone-dark")
 
     /** מסך ההורדות עם כל המצבים: ממתין לבדיקת נטפרי, חסום, נכשל, מוכן להתקנה */
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h860dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h860dp-port-xxhdpi")
     fun downloadStates() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val apps = runBlocking { PlayApi.search("waze") }.items.take(4)
@@ -112,26 +112,26 @@ class ScreensTest {
     }
 
     /** דף אפליקציה מלא, על מסך גבוה במיוחד כדי שכל האזורים ייכנסו לצילום אחד */
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h3400dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h3400dp-port-xxhdpi")
     fun appPageFull() = appPage("full-app")
 
-    @Test @Config(sdk = [34], qualifiers = "w1280dp-h1900dp-land-xhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w1280dp-h1900dp-land-xhdpi")
     fun appPageTablet() = appPage("full-app-tablet")
 
     /** אפליקציה בתשלום: במקום "הורדה" מוצג המחיר, והכפתור לא פעיל */
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h1400dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h1400dp-port-xxhdpi")
     fun appPagePaid() = appPage("full-app-paid", "com.mojang.minecraftpe")
 
     /** אפליקציה שקיימת בפליי ולא ב-APKPure */
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h1100dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h1100dp-port-xxhdpi")
     fun appNotOnApkPure() = appPage("apk-missing", "com.payboxapp")
 
     /** APKPure מעודכן: שורה שקטה עם גרסה, גודל ותאריך */
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h1100dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h1100dp-port-xxhdpi")
     fun appOnApkPure() = appPage("apk-ok", "com.waze")
 
     /** גרסה ישנה ב-APKPure (מדומה: מציבים גרסה ישנה במטמון לפני שהדף בודק) */
-    @Test @Config(sdk = [34], qualifiers = "w400dp-h1100dp-port-xxhdpi")
+    @Test @Config(sdk = [34], qualifiers = "iw-w400dp-h1100dp-port-xxhdpi")
     fun appOlderOnApkPure() = appPage("apk-older", "com.snapchat.android") { vm ->
         vm.apkCache["com.snapchat.android"] = Load.Done(
             app.apkstore.data.ApkSource(
@@ -140,6 +140,17 @@ class ScreensTest {
             )
         )
     }
+
+    // ---- אנגלית (שפת מערכת אנגלית: טקסטים באנגלית, כיוון משמאל לימין, תוכן מפליי באנגלית) ----
+
+    @Test @Config(sdk = [34], qualifiers = "en-rUS-w400dp-h860dp-port-xxhdpi")
+    fun phoneEnglish() = tour("en-phone")
+
+    @Test @Config(sdk = [34], qualifiers = "en-rUS-w400dp-h3400dp-port-xxhdpi")
+    fun appPageEnglish() = appPage("en-full-app")
+
+    @Test @Config(sdk = [34], qualifiers = "en-rUS-w1280dp-h800dp-land-xhdpi")
+    fun tabletEnglish() = tour("en-tablet")
 
     private fun appPage(name: String, pkg: String = "com.waze", prepare: (StoreViewModel) -> Unit = {}) {
         val vm = StoreViewModel(ApplicationProvider.getApplicationContext<Application>())

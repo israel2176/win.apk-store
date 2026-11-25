@@ -16,7 +16,9 @@ import app.apkstore.data.AppSummary
 import app.apkstore.data.DlState
 import app.apkstore.data.Downloads
 import app.apkstore.data.NetFreeBlockException
+import app.apkstore.R
 import app.apkstore.data.ApkPure
+import app.apkstore.data.localized
 import app.apkstore.data.ApkSource
 import app.apkstore.data.NotOnApkPureException
 import app.apkstore.data.PlayApi
@@ -88,12 +90,14 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     val detailsCache = mutableStateMapOf<String, Load<AppDetails>>()
 
     /** שורות הדף הראשי - כל שורה היא חיפוש חי בפליי. אפשר לשנות כאן בחופשיות */
-    private val homeRows = listOf(
-        "כלים" to "כלי עזר",
-        "תחבורה" to "תחבורה ציבורית",
-        "פיננסים" to "בנק",
-        "קניות" to "קניות",
-    )
+    private val homeRows get() = listOf(
+        R.string.home_tools to R.string.home_tools_q,
+        R.string.home_transport to R.string.home_transport_q,
+        R.string.home_finance to R.string.home_finance_q,
+        R.string.home_shopping to R.string.home_shopping_q,
+    ).map { (t, q) -> str(t) to str(q) }
+
+    private fun str(id: Int, vararg args: Any) = getApplication<Application>().getString(id, *args)
 
     init { loadHome() }
 
@@ -104,7 +108,7 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
                 val sections = homeRows.map { (title, q) ->
                     async { HomeSection(title, q, runCatching { PlayApi.search(q).items }.getOrDefault(emptyList()).take(12)) }
                 }.awaitAll().filter { it.apps.isNotEmpty() }
-                if (sections.isEmpty()) Load.Error("לא ניתן לטעון מפליי כרגע") else Load.Done(sections)
+                if (sections.isEmpty()) Load.Error(str(R.string.err_play_load)) else Load.Done(sections)
             } catch (e: Exception) {
                 Load.Error(errorText(e))
             }
@@ -185,7 +189,7 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>()
         viewModelScope.launch {
             try { Installer.install(ctx, state.path, state.xapk) }
-            catch (e: Exception) { Toast.makeText(ctx, e.message ?: "ההתקנה נכשלה", Toast.LENGTH_LONG).show() }
+            catch (e: Exception) { Toast.makeText(ctx, e.localized(ctx), Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -197,12 +201,8 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         val ctx = getApplication<Application>()
         runCatching {
             ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.onFailure { Toast.makeText(ctx, "אין אפליקציה שיכולה לפתוח את הקישור", Toast.LENGTH_SHORT).show() }
+        }.onFailure { Toast.makeText(ctx, str(R.string.err_no_app_for_link), Toast.LENGTH_SHORT).show() }
     }
 
-    private fun errorText(e: Exception) = when (e) {
-        is NetFreeBlockException -> "הגישה לדף נחסמה"
-        is java.net.UnknownHostException -> "אין חיבור לאינטרנט"
-        else -> e.message ?: "שגיאה"
-    }
+    private fun errorText(e: Exception) = e.localized(getApplication())
 }
