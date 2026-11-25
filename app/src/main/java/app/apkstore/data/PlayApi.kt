@@ -45,6 +45,39 @@ data class AppDetails(
     val version: String?,
     val containsAds: Boolean,
     val screenshots: List<String>,
+    // ---- מידע נוסף מדף האפליקציה ----
+    val ratingsCount: Long? = null,
+    val reviewsCount: Long? = null,
+    /** כמות דירוגים לכל מספר כוכבים: אינדקס 0 = כוכב אחד ... 4 = חמישה כוכבים */
+    val histogram: List<Long> = emptyList(),
+    val updated: String? = null,
+    val whatsNew: String? = null,
+    val minAndroid: String? = null,
+    val contentRating: String? = null,
+    val contentRatingNote: String? = null,
+    val installsExact: Long? = null,
+    val inAppPurchases: Boolean = false,
+    val developerEmail: String? = null,
+    val developerWebsite: String? = null,
+    val developerAddress: String? = null,
+    val privacyPolicy: String? = null,
+    val dataSafety: List<String> = emptyList(),
+    val permissions: List<PermissionGroup> = emptyList(),
+    val reviews: List<Review> = emptyList(),
+    val similar: List<AppSummary> = emptyList(),
+)
+
+data class PermissionGroup(val name: String, val items: List<String>)
+
+data class Review(
+    val author: String,
+    val avatar: String?,
+    val score: Int,
+    val text: String,
+    val time: Long?,
+    val likes: Int,
+    val appVersion: String?,
+    val reply: String?,
 )
 
 /**
@@ -97,7 +130,74 @@ object PlayApi {
             version = a.str(140, 0, 0, 0),
             containsAds = a.at(48) != null,
             screenshots = shots(a.at(78, 0)),
+            ratingsCount = a.num(51, 2, 1)?.toLong(),
+            reviewsCount = a.num(51, 3, 1)?.toLong(),
+            histogram = (1..5).map { a.num(51, 1, it, 1)?.toLong() ?: 0L }.takeIf { h -> h.any { it > 0 } } ?: emptyList(),
+            updated = a.str(145, 0, 0),
+            whatsNew = a.str(144, 1, 1)?.let(::html),
+            minAndroid = a.str(140, 1, 1, 0, 0, 1),
+            contentRating = a.str(9, 0),
+            contentRatingNote = a.str(9, 3, 1),
+            installsExact = a.num(13, 2)?.toLong(),
+            inAppPurchases = a.at(19) != null,
+            developerEmail = a.str(69, 1, 0),
+            developerWebsite = a.str(69, 0, 5, 2),
+            developerAddress = a.str(69, 2, 0),
+            privacyPolicy = a.str(99, 0, 5, 2),
+            dataSafety = list(a.at(136, 1)) { it.str(1) },
+            permissions = permissions(a.at(74, 2)),
+            reviews = ds.values.firstNotNullOfOrNull(::reviews).orEmpty(),
+            similar = ds.values.firstNotNullOfOrNull(::similar).orEmpty().filter { it.pkg != pkg },
         )
+    }
+
+    private fun <T> list(raw: Any?, f: (Any?) -> T?): List<T> {
+        val arr = raw as? JSONArray ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { f(arr.opt(it)) }
+    }
+
+    /** הרשאות: קבוצות עם שם (מיקום, אנשי קשר...) ובסוף "אחר" */
+    private fun permissions(raw: Any?): List<PermissionGroup> {
+        val groups = mutableListOf<PermissionGroup>()
+        for (i in 0..1) {
+            groups += list(raw.at(i)) { g ->
+                val name = g.str(0) ?: return@list null
+                PermissionGroup(name, list(g.at(2)) { it.str(1) }).takeIf { it.items.isNotEmpty() }
+            }
+        }
+        val other = list(raw.at(2)) { it.str(1) }
+        if (other.isNotEmpty()) {
+            val i = groups.indexOfFirst { it.name == "אחר" || it.name == "Other" }
+            if (i >= 0) groups[i] = groups[i].copy(items = groups[i].items + other)
+            else groups += PermissionGroup("אחר", other)
+        }
+        return groups
+    }
+
+    /** הביקורות נמצאות בבלוק שבו כל פריט מתחיל במזהה, שם כותב, ציון וטקסט */
+    private fun reviews(d: JSONArray): List<Review>? {
+        val arr = d.at(0) as? JSONArray ?: return null
+        val first = arr.at(0) as? JSONArray ?: return null
+        if (first.str(0) == null || first.str(1, 0) == null || first.num(2) == null) return null
+        return list(arr) { r ->
+            Review(
+                author = r.str(1, 0) ?: return@list null,
+                avatar = r.str(1, 1, 3, 2),
+                score = r.num(2)?.toInt() ?: return@list null,
+                text = r.str(4) ?: return@list null,
+                time = r.num(5, 0)?.toLong()?.times(1000),
+                likes = r.num(6)?.toInt() ?: 0,
+                appVersion = r.str(10),
+                reply = r.str(7, 1),
+            )
+        }.takeIf { it.isNotEmpty() }
+    }
+
+    /** "אפליקציות דומות" - הבלוק שמכיל similar_apps */
+    private fun similar(d: JSONArray): List<AppSummary>? {
+        if (!d.toString().contains("similar_apps")) return null
+        val items = d.at(1, 1, 0, 21, 0) as? JSONArray ?: return null
+        return list(items) { parseItem(JSONArray().put(it)) }.takeIf { it.isNotEmpty() }
     }
 
     // ---- פענוח ----
@@ -117,7 +217,10 @@ object PlayApi {
     }
 
     private fun parseTop(t: JSONArray): AppSummary? {
-        val pkg = t.str(11, 0, 0) ?: return null
+        // המיקום השתנה בעבר: פעם במערך 11, היום באובייקט שבאינדקס 3 תחת המפתח "12"
+        val pkg = t.str(11, 0, 0)
+            ?: ((t.at(3) as? JSONObject)?.optJSONArray("12")).str(0, 0)
+            ?: return null
         return AppSummary(
             pkg = pkg,
             title = t.str(2, 0, 0) ?: pkg,

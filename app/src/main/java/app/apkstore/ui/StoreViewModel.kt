@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 
 enum class Tab { Home, Search, Downloads }
 
-data class HomeSection(val title: String, val apps: List<AppSummary>)
+data class HomeSection(val title: String, val query: String, val apps: List<AppSummary>)
 
 sealed class Load<out T> {
     data object Loading : Load<Nothing>()
@@ -64,7 +64,7 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             home = try {
                 val sections = homeRows.map { (title, q) ->
-                    async { HomeSection(title, runCatching { PlayApi.search(q) }.getOrDefault(emptyList()).take(12)) }
+                    async { HomeSection(title, q, runCatching { PlayApi.search(q) }.getOrDefault(emptyList()).take(12)) }
                 }.awaitAll().filter { it.apps.isNotEmpty() }
                 if (sections.isEmpty()) Load.Error("לא ניתן לטעון מפליי כרגע") else Load.Done(sections)
             } catch (e: Exception) {
@@ -112,9 +112,14 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** פותח את דף החסימה של נטפרי, שבו אפשר לשלוח את הקובץ לבדיקה */
-    fun openCheckPage(url: String) {
+    fun openCheckPage(url: String) = openUrl(url)
+
+    /** פותח קישור (אתר, מדיניות פרטיות, mailto:) באפליקציה המתאימה */
+    fun openUrl(url: String) {
         val ctx = getApplication<Application>()
-        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        runCatching {
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { Toast.makeText(ctx, "אין אפליקציה שיכולה לפתוח את הקישור", Toast.LENGTH_SHORT).show() }
     }
 
     private fun errorText(e: Exception) = when (e) {
