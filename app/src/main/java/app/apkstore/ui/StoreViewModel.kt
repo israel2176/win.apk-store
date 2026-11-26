@@ -114,6 +114,13 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
         R.string.home_transport to R.string.home_transport_q,
         R.string.home_finance to R.string.home_finance_q,
         R.string.home_shopping to R.string.home_shopping_q,
+        R.string.home_health to R.string.home_health_q,
+        R.string.home_comm to R.string.home_comm_q,
+        R.string.home_education to R.string.home_education_q,
+        R.string.home_office to R.string.home_office_q,
+        R.string.home_food to R.string.home_food_q,
+        R.string.home_weather to R.string.home_weather_q,
+        R.string.home_jewish to R.string.home_jewish_q,
     ).map { (t, q) -> str(t) to str(q) }
 
     private fun str(id: Int, vararg args: Any) = getApplication<Application>().getString(id, *args)
