@@ -13,6 +13,7 @@
     <string name="no_results">אין תוצאות</string>
     <string name="download">הורדה</string>
     <string name="install">התקנה</string>
+    <string name="installing">מתקין…</string>
     <string name="netfree">נטפרי</string>
     <string name="dl_pending_check">ממתין לבדיקה</string>
     <string name="dl_blocked">חסום</string>

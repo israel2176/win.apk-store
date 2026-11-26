@@ -34,8 +34,10 @@ object Installer {
     /**
      * מתקין APK רגיל, או XAPK (ZIP עם base + split APKs) בסשן אחד.
      * השם והאייקון נמסרים למערכת, כדי שבמסך ההתקנה ובהתראות יופיע שם האפליקציה ולא רק שם החבילה.
+     * מחזיר את מספר הסשן (סופו מגיע ב-PackageInstaller.SessionCallback.onFinished),
+     * או null כשלא נפתח סשן - צריך קודם לאשר "התקנת אפליקציות לא מוכרות".
      */
-    suspend fun install(context: Context, path: String, xapk: Boolean, pkg: String, title: String, icon: Bitmap?) {
+    suspend fun install(context: Context, path: String, xapk: Boolean, pkg: String, title: String, icon: Bitmap?): Int? {
         val pm = context.packageManager
         val privileged = isPackageInstaller(context)
         if (!privileged && !pm.canRequestPackageInstalls()) {
@@ -46,10 +48,10 @@ object Installer {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, context.getString(app.apkstore.R.string.install_allow), Toast.LENGTH_LONG).show()
             }
-            return
+            return null
         }
 
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             val installer = pm.packageInstaller
             fun params(asPlay: Boolean) = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                 setAppPackageName(pkg)
@@ -67,20 +69,22 @@ object Installer {
                 try { installer.createSession(params(asPlay = true)) }
                 catch (_: SecurityException) { installer.createSession(params(asPlay = false)) }
             } else installer.createSession(params(asPlay = false))
-            installer.openSession(id).use { session ->
+            // נכשל באמצע הכתיבה - מבטלים את הסשן, כדי שלא יישאר פתוח (והכפתור לא יישאר נעול)
+            try { installer.openSession(id).use { session ->
                 if (xapk) {
                     ZipFile(path).use { zip ->
                         val apks = zip.entries().asSequence()
                             .filter { !it.isDirectory && it.name.endsWith(".apk", true) }
                             .toList()
                         if (apks.isEmpty()) throw app.apkstore.data.AppException(app.apkstore.R.string.err_xapk_empty)
+                        val progress = Progress(session, apks.sumOf { it.size.coerceAtLeast(0) })
                         for (e in apks) {
-                            zip.getInputStream(e).use { write(session, e.name.substringAfterLast('/'), e.size, it) }
+                            zip.getInputStream(e).use { write(session, e.name.substringAfterLast('/'), e.size, it, progress) }
                         }
                     }
                 } else {
                     val f = File(path)
-                    f.inputStream().use { write(session, "base.apk", f.length(), it) }
+                    f.inputStream().use { write(session, "base.apk", f.length(), it, Progress(session, f.length())) }
                 }
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
@@ -88,13 +92,35 @@ object Installer {
                     context, id, Intent(context, InstallReceiver::class.java).putExtra(EXTRA_TITLE, title), flags
                 )
                 session.commit(pi.intentSender)
+            } } catch (e: Throwable) {
+                runCatching { installer.abandonSession(id) }
+                throw e
             }
+            id
         }
     }
 
-    private fun write(session: PackageInstaller.Session, name: String, size: Long, input: InputStream) {
+    /** כמה נכתב לסשן מתוך הכול - המערכת מעבירה את זה הלאה ב-onProgressChanged */
+    private class Progress(val session: PackageInstaller.Session, val total: Long) {
+        var written = 0L
+        private var last = -1
+        fun add(n: Int) {
+            written += n
+            if (total <= 0) return
+            val pct = (written * 100 / total).toInt().coerceAtMost(100)
+            if (pct != last) { last = pct; runCatching { session.setStagingProgress(pct / 100f) } }
+        }
+    }
+
+    private fun write(session: PackageInstaller.Session, name: String, size: Long, input: InputStream, progress: Progress) {
         session.openWrite(name, 0, if (size > 0) size else -1).use { out ->
-            input.copyTo(out, 64 * 1024)
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                progress.add(n)
+            }
             session.fsync(out)
         }
     }

@@ -29,4 +29,9 @@ class ActTest {
         assertEquals("unknown version - offer to install", Act.UpdateInstall, actOf(ready(null), v527))
         assertEquals("failed but installed - still open", Act.Open, actOf(DlState.Failed("x"), v527))
     }
+
+    @Test fun installing() {
+        assertEquals("install in progress - locked", Act.Installing, actOf(ready("5.28.0.0"), null, installing = true))
+        assertEquals("update in progress - locked", Act.Installing, actOf(ready("5.28.0.0"), v527, installing = true))
+    }
 }

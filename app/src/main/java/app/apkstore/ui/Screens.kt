@@ -218,6 +218,7 @@ fun SearchScreen(vm: StoreViewModel) {
                         installed = installed[app.pkg],
                         onOpen = { vm.openApp(app.pkg) },
                         onProblem = { vm.showProblem(app.pkg) },
+                        installing = vm.installing[app.pkg],
                     )
                 }
                 // סוף הרשימה: טוען עוד תוצאות (כמו גלילה בפליי)
@@ -259,7 +260,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
             }
             // ברוחב - הכפתור בצד; בטלפון - מתחת
             if (!w.compact) DownloadButton(
-                state, Modifier.widthIn(min = 160.dp), price = app.price, installed = inst, onOpen = { vm.openApp(app.pkg) }, onRetry = { vm.retry(app.pkg) },
+                state, Modifier.widthIn(min = 160.dp), price = app.price, installed = inst, installing = vm.installing[app.pkg], onOpen = { vm.openApp(app.pkg) }, onRetry = { vm.retry(app.pkg) },
                 onDownload = { vm.download(app.pkg, app.title, app.icon) },
                 onInstall = vm::install,
                 onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -267,7 +268,7 @@ private fun TopResult(app: AppSummary, state: DlState?, vm: StoreViewModel) {
         }
         if (app.screenshots.isNotEmpty()) Screenshots(app.screenshots, w.shotHeight * 0.75f, Gutter)
         if (w.compact) DownloadButton(
-            state, Modifier.fillMaxWidth().padding(horizontal = Gutter), price = app.price, installed = inst, onOpen = { vm.openApp(app.pkg) }, onRetry = { vm.retry(app.pkg) },
+            state, Modifier.fillMaxWidth().padding(horizontal = Gutter), price = app.price, installed = inst, installing = vm.installing[app.pkg], onOpen = { vm.openApp(app.pkg) }, onRetry = { vm.retry(app.pkg) },
             onDownload = { vm.download(app.pkg, app.title, app.icon) },
             onInstall = vm::install,
             onShowDownloads = { vm.selectTab(Tab.Downloads) },
@@ -388,7 +389,7 @@ private fun ReadyCard(item: DownloadItem, vm: StoreViewModel) {
         LaunchedEffect(item.pkg) { vm.installed.track(item.pkg) }
         CardHeader(item, listOfNotNull(s.version?.let { "\u2066v$it\u2069" }, if (s.xapk) "XAPK" else "APK").joinToString(" · "), MaterialTheme.colorScheme.onSurfaceVariant, onRemove = { vm.remove(item.pkg) }) {
             // מוכן להתקנה / עדכון, או - אם כבר הותקן - פתיחה
-            DownloadIconButton(s, onDownload = {}, onInstall = vm::install, onShowDownloads = {}, installed = inst, onOpen = { vm.openApp(item.pkg) })
+            DownloadIconButton(s, onDownload = {}, onInstall = vm::install, onShowDownloads = {}, installed = inst, onOpen = { vm.openApp(item.pkg) }, installing = vm.installing[item.pkg])
         }
     }
 }
