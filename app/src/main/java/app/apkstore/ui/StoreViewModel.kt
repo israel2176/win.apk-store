@@ -273,15 +273,23 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         packageInstaller.registerSessionCallback(sessionCallback, Handler(Looper.getMainLooper()))
+        // כמו בפליי: לחיצה אחת - ההורדה נגמרת וההתקנה מתחילה לבד
+        downloads.onReady = { item -> install(item) }
     }
 
     override fun onCleared() {
+        downloads.onReady = null
         packageInstaller.unregisterSessionCallback(sessionCallback)
     }
 
+    /** "התקנה" / "עדכון" על קובץ שכבר ירד: אחרי התקנה שנכשלה או בוטלה, או הורדה מגרסה קודמת של החנות */
     fun install(state: DlState.Ready) {
+        install(downloads.items.value.firstOrNull { it.state == state } ?: return)
+    }
+
+    private fun install(item: DownloadItem) {
         val ctx = getApplication<Application>()
-        val item = downloads.items.value.firstOrNull { it.state == state } ?: return
+        val state = item.state as? DlState.Ready ?: return
         val pkg = item.pkg
         // כבר בהתקנה - לחיצה שנייה לא עושה כלום. נרשם מיד, לפני כל עבודה (גם לפני הבאת האייקון)
         if (pkg in installing) return
