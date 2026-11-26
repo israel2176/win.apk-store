@@ -92,13 +92,16 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
      */
     val apkCache = mutableStateMapOf<String, Load<ApkSource?>>()
 
+    /** למה אין קובץ (Done(null)): הכותרת וההסבר שבדף האפליקציה */
+    val apkMissing = mutableStateMapOf<String, NotOnApkPureException>()
+
     fun checkApk(pkg: String) {
         val cur = apkCache[pkg]
         if (cur != null && cur !is Load.Error) return
         apkCache[pkg] = Load.Loading
         viewModelScope.launch {
             apkCache[pkg] = try { Load.Done(ApkPure.resolve(pkg)) }
-            catch (e: NotOnApkPureException) { Load.Done(null) }
+            catch (e: NotOnApkPureException) { apkMissing[pkg] = e; Load.Done(null) }
             catch (e: Exception) { Load.Error(errorText(e)) }
         }
     }

@@ -1,6 +1,7 @@
 package app.apkstore.data
 
 import android.os.Build
+import androidx.annotation.StringRes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
@@ -19,52 +20,137 @@ data class ApkSource(
     val updatedAt: Long? = null,
 )
 
-/** האפליקציה לא קיימת ב-APKPure בכלל */
-class NotOnApkPureException(val pkg: String) : AppException(app.apkstore.R.string.err_apkpure_missing)
+/**
+ * אין ב-APKPure קובץ שאפשר להוריד. title/body - מה שדף האפליקציה מציג במקום פרטי הקובץ.
+ */
+open class NotOnApkPureException(
+    val pkg: String,
+    res: Int = app.apkstore.R.string.err_apkpure_missing,
+    @StringRes val titleRes: Int = app.apkstore.R.string.apk_missing_title,
+    @StringRes val bodyRes: Int = app.apkstore.R.string.apk_missing_body,
+) : AppException(res)
+
+/** יש ב-APKPure קבצים, אבל אף אחד מהם לא למעבד של המכשיר (ויש בהם קוד מקומי) */
+class NoAbiException(pkg: String) : NotOnApkPureException(
+    pkg, app.apkstore.R.string.err_apkpure_no_abi,
+    app.apkstore.R.string.apk_no_abi_title, app.apkstore.R.string.apk_no_abi_body,
+)
 
 /**
  * מוצא קישור הורדה ב-APKPure לפי שם חבילה - אותה קריאה ש-apkeep עושה
  * (src/download_sources/apkpure.rs). עובד גם לאפליקציות שלא מופיעות באתר שלהם.
  *
- * התשובה בינארית (protobuf). לכל גרסה יש בה, לפי הסדר: שם גרסה, קישור הורדה,
- * ותאריך העלאה. הגרסה הראשונה היא העדכנית ביותר.
+ * התשובה בינארית (protobuf). לכל וריאנט יש בה, לפי הסדר: שם גרסה, קישור הורדה,
+ * ותאריך העלאה. הגרסה הראשונה היא העדכנית ביותר, ולכל גרסה יכולים להיות כמה וריאנטים.
+ *
+ * כמו Google Play: הקובץ למעבד של המכשיר, לפי Build.SUPPORTED_ABIS ובסדר שלו
+ * (ב-Win.apk: x86_64, ואחריו arm64-v8a שמתורגם). APKPure מחזיר כל מה שמכשיר כזה יכול
+ * להריץ (למשל גם x86 בלבד), בלי לומר מה יש בכל קובץ - ולכן בודקים את הקבצים עצמם
+ * (ראו [RemoteZip]), כמו EFForg/apkeep#259: הגרסה העדכנית ביותר שיש לה וריאנט עם
+ * ABI של המכשיר (הראשון ברשימה קודם), או בלי קוד מקומי בכלל.
  */
 object ApkPure {
+    /** מה המכשיר מריץ, מהמועדף */
+    val deviceAbis: List<String> get() = Build.SUPPORTED_ABIS.toList()
+
     private const val VERSIONS_URL = "https://api.pureapk.com/m/v3/cms/app_version?hl=en-US&package_name="
     private val DOWNLOAD = Regex(
         """(X?APKJ)[\s\S]{2}(https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&/=]*))"""
     )
-    /** כמו list_versions ב-apkeep: "5.28.0.0" ואחריו sha1 */
-    private val VERSION = Regex("""([A-Za-z0-9.\-]+):\([0-9a-fA-F]{40,}""")
+    /**
+     * שם גרסה ואחריו sha1. בשם יכולים להיות רווחים, סוגריים וסוגריים מרובעים
+     * ("26.43.30 (040700-1006944126)", "54.3.08-24 [0] [PR] 1022323148") - כמו
+     * התיקונים של Win.apk ל-apkeep (windows/scripts/apkeep-patches/).
+     */
+    private val VERSION = Regex("""([A-Za-z0-9][A-Za-z0-9 ._()\[\]+\-]*):\([0-9a-fA-F]{40,}""")
     private val DATE = Regex("""20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d[+\-]\d\d:\d\d""")
+
+    /** גרסה אחת ברשימה של APKPure, והווריאנטים שלה לפי הסדר */
+    internal data class Listed(val version: String, val variants: List<ApkSource>)
 
     suspend fun resolve(pkg: String): ApkSource = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url(VERSIONS_URL + pkg)
             .header("x-cv", "3172501")
-            .header("x-sv", "29")
-            .header("x-abis", Build.SUPPORTED_ABIS.joinToString(","))
+            // רמת ה-API של המכשיר, כמו שהאפליקציה של APKPure שולחת (Win.apk: 34)
+            .header("x-sv", Build.VERSION.SDK_INT.toString())
+            // ה-ABIs של המכשיר. רק עם ", " ביניהם (EFForg/apkeep#258): עם "," בלבד
+            // APKPure מתעלם מהכותרת ומחזיר arm64-v8a.
+            .header("x-abis", deviceAbis.joinToString(", "))
             .header("x-gp", "1")
             .build()
-        Http.client.newCall(req).execute().use { resp ->
+        val text = Http.client.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
             val ct = resp.header("Content-Type")
             if (ct?.contains("html", true) == true) {
                 NetFree.detect(ct, String(bytes, Charsets.UTF_8))?.let { throw NetFreeBlockException(it) }
             }
             if (!resp.isSuccessful) throw AppException(app.apkstore.R.string.err_apkpure_http, resp.code)
-            // מפענחים כ-Latin-1 כדי לא לשבור בתים
-            parse(String(bytes, Charsets.ISO_8859_1)) ?: throw NotOnApkPureException(pkg)
+            // מפענחים כ-Latin-1 כדי לא לשבור בתים: כל תו הוא בית אחד
+            String(bytes, Charsets.ISO_8859_1)
         }
+        val listed = list(text)
+        if (listed.isEmpty()) {
+            // לא הצלחנו לפרק לגרסאות - הקובץ הראשון, כמו apkeep
+            return@withContext parse(text) ?: throw NotOnApkPureException(pkg)
+        }
+        choose(pkg, listed, deviceAbis) { RemoteZip.abis(it) }
     }
 
-    /** null = אין קובץ (APKPure מחזיר תשובה כמעט ריקה לאפליקציה שאין לו) */
+    /**
+     * בוחר וריאנט: בכל גרסה (מהעדכנית), לכל ABI של המכשיר לפי הסדר - הווריאנט הראשון שיש בו
+     * אותו, או שאין בו קוד מקומי.
+     * abisOf: ה-ABIs שבקובץ; ריק = בלי קוד מקומי; null = אי אפשר לדעת.
+     * גרסה שאי אפשר לדעת מה יש בה - הקובץ הראשון (מה ש-APKPure נתן למכשיר כזה), כמו apkeep#259.
+     * כל הקבצים ידועים ואף אחד לא למעבד של המכשיר - [NoAbiException].
+     */
+    internal suspend fun choose(
+        pkg: String, listed: List<Listed>, device: List<String>, abisOf: suspend (String) -> Set<String>?,
+    ): ApkSource {
+        for (v in listed) {
+            val abis = v.variants.map { abisOf(it.url) }
+            for (abi in device) {
+                v.variants.zip(abis).firstOrNull { (_, a) -> a != null && (a.isEmpty() || abi in a) }?.let { return it.first }
+            }
+            if (abis.any { it == null }) return listed[0].variants[0]
+        }
+        throw NoAbiException(pkg)
+    }
+
+    /** הגרסאות שבתשובה, מהעדכנית, עם הווריאנטים של כל אחת (בלי כפילויות) */
+    internal fun list(text: String): List<Listed> {
+        val names = VERSION.findAll(text).map { m ->
+            val g = m.groups[1]!!
+            // ה-protobuf: לפני השם בא האורך שלו. אם ההתאמה תפסה גם תווים מהשדה שלפני -
+            // השם מתחיל במקום שהבית שלפניו הוא אורך היתרה.
+            var start = g.range.first
+            for (at in g.range) {
+                if (at > 0 && text[at - 1].code == g.range.last + 1 - at) { start = at; break }
+            }
+            Triple(start, m.range.last + 1, text.substring(start, g.range.last + 1))
+        }.toList()
+        val out = LinkedHashMap<String, MutableList<ApkSource>>()
+        names.forEachIndexed { i, (_, end, name) ->
+            val next = names.getOrNull(i + 1)?.first ?: text.length
+            val seg = text.substring(end, next)
+            val m = DOWNLOAD.find(seg) ?: return@forEachIndexed
+            val src = source(m, name, DATE.find(seg, m.range.last)?.value)
+            val variants = out.getOrPut(name) { mutableListOf() }
+            if (variants.none { it.url == src.url }) variants += src
+        }
+        return out.map { (k, v) -> Listed(k, v) }
+    }
+
+    /** הקובץ הראשון בתשובה. null = אין קובץ (APKPure מחזיר תשובה כמעט ריקה לאפליקציה שאין לו) */
     internal fun parse(text: String): ApkSource? {
         val m = DOWNLOAD.find(text) ?: return null
-        val url = m.groupValues[2]
         // שם הגרסה - האחרון שלפני הקישור; התאריך - הראשון שאחרי הקישור
         val name = VERSION.findAll(text.substring(0, m.range.first)).lastOrNull()?.groupValues?.get(1)
-        val date = DATE.find(text, m.range.last)?.value
+        return source(m, name, DATE.find(text, m.range.last)?.value)
+    }
+
+    private fun source(m: MatchResult, name: String?, date: String?): ApkSource {
+        val url = m.groupValues[2]
         val meta = urlMeta(url)
         return ApkSource(
             url = url,
