@@ -26,6 +26,8 @@
     <string name="apk_check_failed">לא ניתן לבדוק כרגע אם האפליקציה זמינה ב-APKPure</string>
     <string name="apk_missing_title">האפליקציה לא זמינה ב-APKPure</string>
     <string name="apk_missing_body">אין ממנה קובץ להורדה, ולכן אי אפשר להוריד אותה דרך החנות.</string>
+    <string name="apk_no_abi_title">אין ב-APKPure גרסה למעבד של המכשיר</string>
+    <string name="apk_no_abi_body">ב-APKPure יש מהאפליקציה רק גרסאות למעבדים אחרים, ולכן אי אפשר להוריד אותה דרך החנות.</string>
     <string name="apk_older_title">ב-APKPure יש גרסה ישנה יותר מבפליי</string>
     <string name="apk_older_versions">ב-APKPure: %1$s · בפליי: %2$s\nאפשר להוריד בכל זאת את הגרסה הקיימת.</string>
     <string name="apk_older_dates">הגרסה ב-APKPure עלתה ב-%1$s, ובפליי האפליקציה עודכנה ב-%2$s.\nאפשר להוריד בכל זאת את הגרסה הקיימת.</string>
@@ -79,6 +81,7 @@
     <string name="err_play_http">שגיאה בגישה לפליי (%1$d)</string>
     <string name="err_play">שגיאה בגישה לפליי</string>
     <string name="err_apkpure_missing">האפליקציה לא זמינה ב-APKPure, ולכן אי אפשר להוריד אותה מכאן</string>
+    <string name="err_apkpure_no_abi">אין ב-APKPure גרסה של האפליקציה למעבד של המכשיר, ולכן אי אפשר להוריד אותה מכאן</string>
     <string name="err_apkpure_http">APKPure החזיר שגיאה (%1$d)</string>
     <string name="err_unknown">שגיאה לא ידועה</string>
     <string name="err_download">ההורדה נכשלה</string>

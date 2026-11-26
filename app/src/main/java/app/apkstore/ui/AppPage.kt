@@ -198,7 +198,7 @@ private fun mb(bytes: Long) = ltr("%.1f MB".format(bytes / 1_048_576.0))
 
 /**
  * מה יש ב-APKPure, מתחת לכפתור ההורדה:
- * - אין שם קובץ בכלל: הודעה אדומה, והכפתור "לא זמין להורדה"
+ * - אין שם קובץ בכלל, או אין קובץ למעבד של המכשיר: הודעה אדומה, והכפתור "לא זמין להורדה"
  * - יש, אבל גרסה ישנה יותר מבפליי: הודעה כתומה עם שתי הגרסאות (או התאריכים)
  * - יש ומעודכן: שורה שקטה עם גרסה, גודל, סוג ותאריך
  */
@@ -216,9 +216,10 @@ private fun SourceInfo(a: AppDetails, vm: StoreViewModel) {
         is Load.Done -> {
             val src = s.value
             if (src == null) {
+                val why = vm.apkMissing[a.pkg]
                 Note(Icons.Default.Warning, cs.errorContainer, cs.onErrorContainer,
-                    stringResource(R.string.apk_missing_title),
-                    stringResource(R.string.apk_missing_body))
+                    stringResource(why?.titleRes ?: R.string.apk_missing_title),
+                    stringResource(why?.bodyRes ?: R.string.apk_missing_body))
                 return
             }
             val facts = listOfNotNull(

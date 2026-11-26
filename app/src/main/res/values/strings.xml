@@ -27,6 +27,8 @@
     <string name="apk_check_failed">Can\'t check APKPure right now</string>
     <string name="apk_missing_title">Not available on APKPure</string>
     <string name="apk_missing_body">There\'s no file for it on APKPure, so it can\'t be downloaded through the store.</string>
+    <string name="apk_no_abi_title">No version for this device\'s processor on APKPure</string>
+    <string name="apk_no_abi_body">APKPure only has builds of this app for other processors, so it can\'t be downloaded through the store.</string>
     <string name="apk_older_title">APKPure has an older version than Google Play</string>
     <string name="apk_older_versions">APKPure: %1$s · Google Play: %2$s\nYou can still download the available version.</string>
     <string name="apk_older_dates">The APKPure version was uploaded on %1$s, and the app was updated on Google Play on %2$s.\nYou can still download the available version.</string>
@@ -80,6 +82,7 @@
     <string name="err_play_http">Error accessing Google Play (%1$d)</string>
     <string name="err_play">Error accessing Google Play</string>
     <string name="err_apkpure_missing">Not available on APKPure, so it can\'t be downloaded here</string>
+    <string name="err_apkpure_no_abi">APKPure has no version of this app for this device\'s processor, so it can\'t be downloaded here</string>
     <string name="err_apkpure_http">APKPure returned an error (%1$d)</string>
     <string name="err_unknown">Unknown error</string>
     <string name="err_download">Download failed</string>
