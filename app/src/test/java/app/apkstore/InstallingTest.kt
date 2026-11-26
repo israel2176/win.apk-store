@@ -108,6 +108,22 @@ class InstallingTest {
         rule.onNodeWithContentDescription(install).assertIsEnabled()
     }
 
+    /** כמו בפליי: הורדה שנגמרה עם קובץ ממשיכה ישר להתקנה, בלי לחיצה נוספת */
+    @Test @Config(shadows = [WaitingSession::class])
+    fun downloadDoneInstalls() {
+        shadowOf(app.packageManager).setCanRequestPackageInstalls(true)
+        val vm = readyItem()
+        rule.setContent { DownloadsScreen(vm) }
+        val item = vm.downloads.items.value.first { it.pkg == pkg }
+        rule.runOnIdle {
+            vm.downloads.onReady!!.invoke(item)
+            assertTrue("installing at once", pkg in vm.installing)
+        }
+        waitUntil("session") { installer.allSessions.isNotEmpty() }
+        assertEquals(pkg, installer.allSessions.single().appPackageName)
+        rule.onNodeWithContentDescription(app.getString(R.string.installing)).assertIsNotEnabled()
+    }
+
     /** "מקורות לא ידועים" לא אושר: לא נפתח סשן, והכפתור לא נשאר נעול */
     @Test fun noSessionReleases() {
         shadowOf(app.packageManager).setCanRequestPackageInstalls(false)

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Request
 import app.apkstore.R
 import org.json.JSONArray
@@ -47,6 +48,12 @@ class Downloads(context: Context) {
 
     fun stateOf(pkg: String): DlState? = _items.value.firstOrNull { it.pkg == pkg }?.state
 
+    /**
+     * נקרא ב-Main thread כשהורדה נגמרת עם קובץ, לפני שהמצב "מוכן" מוצג - כמו בפליי, ההורדה ממשיכה
+     * ישר להתקנה, והכפתור עובר מההורדה ל"מתקין…" בלי לעצור על "התקנה".
+     */
+    var onReady: ((DownloadItem) -> Unit)? = null
+
     fun start(pkg: String, title: String, icon: String?) {
         synchronized(jobs) { if (jobs[pkg]?.isActive == true) return }
         set(DownloadItem(pkg, title, icon, DlState.Preparing))
@@ -58,6 +65,11 @@ class Downloads(context: Context) {
                     is kotlinx.coroutines.CancellationException -> throw e
                     is NotOnApkPureException -> DlState.Failed(e.localized(app), retryable = false)
                     else -> DlState.Failed(e.localized(app))
+                }
+            }
+            if (state is DlState.Ready) {
+                _items.value.firstOrNull { it.pkg == pkg }?.let { item ->
+                    withContext(Dispatchers.Main) { onReady?.invoke(item.copy(state = state)) }
                 }
             }
             update(pkg, state)
