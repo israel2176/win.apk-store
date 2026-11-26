@@ -51,6 +51,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -148,7 +150,7 @@ fun Rating(score: Double?, modifier: Modifier = Modifier) {
 @Composable
 fun AppRow(
     app: AppSummary, state: DlState?, onClick: () -> Unit, onDownload: () -> Unit, onInstall: (DlState.Ready) -> Unit, onShowDownloads: () -> Unit,
-    installed: InstalledApp? = null, onOpen: () -> Unit = {}, onProblem: () -> Unit = {},
+    installed: InstalledApp? = null, onOpen: () -> Unit = {}, onProblem: () -> Unit = {}, installing: Float? = null,
 ) {
     Row(
         Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(onClick = onClick)
@@ -168,7 +170,7 @@ fun AppRow(
             }
         }
         // אפליקציה בתשלום: מציגים את המחיר ולא מורידים
-        if (app.price != null && installed == null) PricePill(app.price) else DownloadIconButton(state, onDownload, onInstall, onShowDownloads, installed, onOpen, onProblem)
+        if (app.price != null && installed == null) PricePill(app.price) else DownloadIconButton(state, onDownload, onInstall, onShowDownloads, installed, onOpen, onProblem, installing)
     }
 }
 
@@ -186,11 +188,12 @@ fun GenrePill(text: String) {
 
 /**
  * מה הכפתור מציע, לפי מצב ההורדה ומה שמותקן בטלפון:
- * הורדה → (מוריד) → התקנה → פתיחה. אם מותקנת גרסה ישנה: עדכון.
+ * הורדה → (מוריד) → התקנה → (מתקין) → פתיחה. אם מותקנת גרסה ישנה: עדכון.
+ * installing: ההתקנה כבר התחילה ועוד לא נגמרה - הכפתור נעול עד הסוף.
  */
-enum class Act { Download, Progress, NetFree, Failed, Install, UpdateInstall, UpdateDownload, Open }
+enum class Act { Download, Progress, NetFree, Failed, Install, UpdateInstall, Installing, UpdateDownload, Open }
 
-fun actOf(state: DlState?, installed: InstalledApp?, updateAvailable: Boolean = false): Act = when (state) {
+fun actOf(state: DlState?, installed: InstalledApp?, updateAvailable: Boolean = false, installing: Boolean = false): Act = if (installing) Act.Installing else when (state) {
     is DlState.Preparing, is DlState.Downloading -> Act.Progress
     is DlState.NotChecked, is DlState.Blocked -> Act.NetFree
     is DlState.Failed -> if (installed != null) Act.Open else Act.Failed
@@ -217,12 +220,20 @@ fun DownloadIconButton(
     installed: InstalledApp? = null,
     onOpen: () -> Unit = {},
     onProblem: () -> Unit = {},
+    installing: Float? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val filled = IconButtonDefaults.filledTonalIconButtonColors(containerColor = cs.primary, contentColor = cs.onPrimary)
-    when (actOf(state, installed)) {
+    when (actOf(state, installed, installing = installing != null)) {
         Act.Install, Act.UpdateInstall -> FilledTonalIconButton(onClick = { onInstall(state as DlState.Ready) }, colors = filled) {
             Icon(if (installed != null) Icons.Default.Refresh else InstallIcon, stringResource(if (installed != null) R.string.update else R.string.install))
+        }
+        // מתקין: הכפתור נעול, ובתוכו עיגול התקדמות קטן
+        Act.Installing -> {
+            val label = stringResource(R.string.installing)
+            FilledTonalIconButton(onClick = {}, Modifier.semantics { contentDescription = label }, enabled = false) {
+                InstallProgress(installing ?: -1f, 22.dp, 2.5.dp)
+            }
         }
         Act.Open -> FilledTonalIconButton(onClick = onOpen) { Icon(OpenIcon, stringResource(R.string.open)) }
         Act.UpdateDownload -> FilledTonalIconButton(onClick = onDownload, colors = filled) { Icon(Icons.Default.Refresh, stringResource(R.string.update)) }
@@ -245,6 +256,14 @@ fun DownloadIconButton(
         ) { Icon(Icons.Default.Warning, stringResource(R.string.failed_retry)) }
         Act.Download -> FilledTonalIconButton(onClick = onDownload) { Icon(DownloadIcon, stringResource(R.string.download)) }
     }
+}
+
+/** עיגול ההתקנה: מלא לפי ההתקדמות, או מסתובב כשעוד לא ידוע (‎-1) */
+@Composable
+private fun InstallProgress(progress: Float, size: Dp, stroke: Dp) {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    if (progress >= 0) CircularProgressIndicator(progress = { progress }, Modifier.size(size), color = color, strokeWidth = stroke)
+    else CircularProgressIndicator(Modifier.size(size), color = color, strokeWidth = stroke)
 }
 
 @Composable
@@ -272,6 +291,7 @@ fun DownloadButton(
     unavailable: Boolean = false,
     installed: InstalledApp? = null,
     updateAvailable: Boolean = false,
+    installing: Float? = null,
     onDownload: () -> Unit,
     onInstall: (DlState.Ready) -> Unit,
     onShowDownloads: () -> Unit,
@@ -280,7 +300,7 @@ fun DownloadButton(
 ) {
     val cs = MaterialTheme.colorScheme
     val mod = modifier.height(48.dp)
-    if (state == null && installed == null && (price != null || preregister || unavailable)) {
+    if (state == null && installed == null && installing == null && (price != null || preregister || unavailable)) {
         Button(onClick = {}, mod, enabled = false) {
             Text(price ?: stringResource(if (preregister) R.string.preregister else R.string.unavailable))
         }
@@ -289,9 +309,12 @@ fun DownloadButton(
     @Composable fun Label(icon: ImageVector, text: Int) {
         Icon(icon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(text))
     }
-    when (actOf(state, installed, updateAvailable && !unavailable)) {
+    when (actOf(state, installed, updateAvailable && !unavailable, installing = installing != null)) {
         Act.Install -> Button(onClick = { onInstall(state as DlState.Ready) }, mod) { Label(InstallIcon, R.string.install) }
         Act.UpdateInstall -> Button(onClick = { onInstall(state as DlState.Ready) }, mod) { Label(Icons.Default.Refresh, R.string.update) }
+        Act.Installing -> Button(onClick = {}, mod, enabled = false) {
+            InstallProgress(installing ?: -1f, 20.dp, 2.5.dp); Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.installing))
+        }
         Act.UpdateDownload -> Button(onClick = onDownload, mod) { Label(Icons.Default.Refresh, R.string.update) }
         Act.Open -> androidx.compose.material3.FilledTonalButton(onClick = onOpen, mod) { Label(OpenIcon, R.string.open) }
         Act.Progress -> OutlinedButton(onClick = onShowDownloads, mod) {

@@ -14,6 +14,7 @@
     <string name="no_results">No results</string>
     <string name="download">Download</string>
     <string name="install">Install</string>
+    <string name="installing">Installing…</string>
     <string name="netfree">NetFree</string>
     <string name="dl_pending_check">Awaiting review</string>
     <string name="dl_blocked">Blocked</string>

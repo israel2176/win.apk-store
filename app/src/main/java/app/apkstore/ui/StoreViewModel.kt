@@ -2,7 +2,10 @@ package app.apkstore.ui
 
 import android.app.Application
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -33,6 +36,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import app.apkstore.data.Review
 import app.apkstore.data.ReviewSort
 import app.apkstore.install.Installer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -225,9 +229,53 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
     fun retry(pkg: String) = downloads.retry(pkg)
     fun remove(pkg: String) = downloads.remove(pkg)
 
+    /**
+     * חבילות שבהתקנה עכשיו: pkg -> התקדמות (0..1; ‎-1 = עוד לא ידוע).
+     * נכנסת ברגע הלחיצה ויוצאת כשההתקנה נגמרת - עד אז הכפתור נעול ("מתקין…"),
+     * כך שלחיצה שנייה לא פותחת התקנה נוספת של אותה חבילה.
+     */
+    val installing = mutableStateMapOf<String, Float>()
+
+    /** סשן ההתקנה -> החבילה שלו (נגיש רק מה-Main thread) */
+    private val sessions = mutableMapOf<Int, String>()
+
+    private val packageInstaller = app.packageManager.packageInstaller
+
+    /** סוף ההתקנה מגיע מהמערכת: הצלחה, כישלון, או ביטול בחלון האישור */
+    private val sessionCallback = object : PackageInstaller.SessionCallback() {
+        override fun onCreated(sessionId: Int) {
+            // הסשן נפתח עוד לפני ש-Installer.install חוזר - כך גם ההתקדמות של הכתיבה מגיעה לכפתור
+            val pkg = runCatching { packageInstaller.getSessionInfo(sessionId)?.appPackageName }.getOrNull() ?: return
+            if (pkg in installing && sessionId !in sessions) sessions[sessionId] = pkg
+        }
+        override fun onBadgingChanged(sessionId: Int) {}
+        override fun onActiveChanged(sessionId: Int, active: Boolean) {}
+        override fun onProgressChanged(sessionId: Int, progress: Float) {
+            sessions[sessionId]?.let { installing[it] = progress.coerceIn(0f, 1f) }
+        }
+        override fun onFinished(sessionId: Int, success: Boolean) {
+            val pkg = sessions.remove(sessionId) ?: return
+            // קודם מעדכנים "מותקן", ואז משחררים - כדי שהכפתור יעבור ישר ל"פתיחה" ולא יהבהב "התקנה"
+            if (success) installed.refresh(pkg)
+            installing.remove(pkg)
+        }
+    }
+
+    init {
+        packageInstaller.registerSessionCallback(sessionCallback, Handler(Looper.getMainLooper()))
+    }
+
+    override fun onCleared() {
+        packageInstaller.unregisterSessionCallback(sessionCallback)
+    }
+
     fun install(state: DlState.Ready) {
         val ctx = getApplication<Application>()
         val item = downloads.items.value.firstOrNull { it.state == state } ?: return
+        val pkg = item.pkg
+        // כבר בהתקנה - לחיצה שנייה לא עושה כלום. נרשם מיד, לפני כל עבודה (גם לפני הבאת האייקון)
+        if (pkg in installing) return
+        installing[pkg] = -1f
         viewModelScope.launch {
             try {
                 // האייקון מפליי, כדי שמסך ההתקנה של המערכת יציג אותו עם השם
@@ -235,8 +283,23 @@ class StoreViewModel(app: Application) : AndroidViewModel(app) {
                     val req = ImageRequest.Builder(ctx).data(sizedImage(item.icon, 192)).allowHardware(false).build()
                     (ctx.imageLoader.execute(req) as? SuccessResult)?.drawable?.toBitmap()
                 }.getOrNull()
-                Installer.install(ctx, state.path, state.xapk, item.pkg, item.title, icon)
-            } catch (e: Exception) { Toast.makeText(ctx, e.localized(ctx), Toast.LENGTH_LONG).show() }
+                val id = Installer.install(ctx, state.path, state.xapk, pkg, item.title, icon)
+                when {
+                    // לא נפתח סשן (צריך לאשר "מקורות לא ידועים") - אין מה לחכות לו
+                    id == null -> installing.remove(pkg)
+                    // הסשן כבר נגמר לפני שחזרנו לכאן
+                    runCatching { packageInstaller.getSessionInfo(id) }.getOrNull() == null -> {
+                        sessions.remove(id); installing.remove(pkg)
+                    }
+                    else -> sessions[id] = pkg
+                }
+            } catch (e: CancellationException) {
+                installing.remove(pkg)
+                throw e
+            } catch (e: Exception) {
+                installing.remove(pkg)
+                Toast.makeText(ctx, e.localized(ctx), Toast.LENGTH_LONG).show()
+            }
         }
     }
 

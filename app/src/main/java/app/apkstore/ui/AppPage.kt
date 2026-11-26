@@ -122,6 +122,7 @@ fun AppScreen(vm: StoreViewModel, pkg: String) {
                     DownloadButton(
                         items.stateFor(pkg), mod, price = a.price, preregister = a.preregister,
                         installed = inst,
+                        installing = vm.installing[pkg],
                         // יש עדכון: הגרסה ב-APKPure חדשה מהמותקנת
                         updateAvailable = inst != null && apk?.versionCode?.let { it > inst.versionCode } == true,
                         onOpen = { vm.openApp(pkg) },
