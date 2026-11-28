@@ -599,9 +599,9 @@ private fun SimilarPanel(a: AppDetails, vm: StoreViewModel, padded: Boolean) {
             Modifier.padding(horizontal = if (padded) Pad else 0.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) { SectionTitle(stringResource(R.string.similar_apps)) }
-        LazyRow(
+        HScrollRow(
             contentPadding = PaddingValues(horizontal = if (padded) Pad else 0.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            spacing = 14.dp, arrowCenter = w.tileSize / 2,
         ) {
             items(a.similar, key = { it.pkg }) { app -> AppTile(app, w.tileSize) { vm.open(app.pkg) } }
         }

@@ -100,4 +100,8 @@
     <string name="update">Update</string>
     <string name="failed_retry">Failed · Try again</string>
     <string name="cant_open">This app can\'t be opened from here</string>
+    <string name="tab_for_you">For you</string>
+    <string name="tab_categories">Categories</string>
+    <string name="scroll_back">Previous</string>
+    <string name="scroll_forward">Next</string>
 </resources>

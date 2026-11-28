@@ -99,4 +99,8 @@
     <string name="update">עדכון</string>
     <string name="failed_retry">נכשל · נסה שוב</string>
     <string name="cant_open">אי אפשר לפתוח את האפליקציה הזו מכאן</string>
+    <string name="tab_for_you">בשבילך</string>
+    <string name="tab_categories">קטגוריות</string>
+    <string name="scroll_back">הקודם</string>
+    <string name="scroll_forward">הבא</string>
 </resources>
